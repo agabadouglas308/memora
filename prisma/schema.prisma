@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./second-brain.db"
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  size      Int
+  text      String
+  status    String   @default("ready")
+  createdAt DateTime @default(now())
+  chunks    Chunk[]
+}
+
+model Chunk {
+  id         String   @id @default(cuid())
+  documentId String
+  text       String
+  position   Int
+  embedding  String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  citations String   @default("[]")
+  createdAt DateTime @default(now())
+}
