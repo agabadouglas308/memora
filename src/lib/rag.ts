@@ -18,7 +18,9 @@ export function chunkText(text: string, size = 900, overlap = 180) {
     }
     const chunk = clean.slice(start, end).trim();
     if (chunk) chunks.push(chunk);
-    start = end - overlap;
+    const next = end - overlap;
+    // Never move backwards: a negative or stalled start would loop forever.
+    start = next > start ? next : end;
   }
   return chunks;
 }
@@ -50,9 +52,30 @@ export function embedText(text: string, dimensions = 384): number[] {
 }
 
 export function cosine(a: number[], b: number[]) {
-  let sum = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) sum += a[i] * b[i];
-  return sum;
+  let dot = 0;
+  let magnitudeA = 0;
+  let magnitudeB = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    dot += a[i] * b[i];
+    magnitudeA += a[i] * a[i];
+    magnitudeB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB);
+  return denominator ? dot / denominator : 0;
+}
+
+export function parseEmbedding(value: string, dimensions = 384): number[] {
+  const empty = new Array<number>(dimensions).fill(0);
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return empty;
+    const vector = parsed.filter(
+      (item): item is number => typeof item === "number" && Number.isFinite(item)
+    );
+    return vector.length ? vector : empty;
+  } catch {
+    return empty;
+  }
 }
 
 export function answerFromContext(question: string, contexts: Array<{ text: string; documentName: string }>) {
@@ -70,7 +93,7 @@ export function answerFromContext(question: string, contexts: Array<{ text: stri
         .replace(/\n+/g, " ")
         .split(/(?<=[.!?])\s+/)
         .map((sentence) => sentence.trim())
-        .filter((sentence) => sentence.length > 35)
+        .filter((sentence) => sentence.length > 24)
         .map((sentence) => ({
           sentence,
           documentName: context.documentName,
@@ -78,6 +101,7 @@ export function answerFromContext(question: string, contexts: Array<{ text: stri
             .filter((term) => questionTerms.has(term)).length,
         }))
     )
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 

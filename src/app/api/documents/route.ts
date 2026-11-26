@@ -82,8 +82,9 @@ export async function POST(request: NextRequest) {
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
-  const allowed = ["application/pdf", "text/plain", "text/markdown", "application/octet-stream"];
-  if (!allowed.includes(file.type) && !/\.(pdf|txt|md|markdown)$/i.test(file.name)) {
+  const allowedTypes = ["application/pdf", "text/plain", "text/markdown"];
+  const hasAllowedExtension = /\.(pdf|txt|md|markdown)$/i.test(file.name);
+  if (!allowedTypes.includes(file.type) && !hasAllowedExtension) {
     return NextResponse.json({ error: "Upload a PDF, Markdown, or TXT file" }, { status: 400 });
   }
   if (file.size > 10 * 1024 * 1024) {

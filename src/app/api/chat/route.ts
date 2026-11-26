@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { answerFromContext, cosine, embedText } from "@/lib/rag";
+import { answerFromContext, cosine, embedText, parseEmbedding } from "@/lib/rag";
 
 export const runtime = "nodejs";
 
@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
       position: chunk.position,
       documentId: chunk.document.id,
       documentName: chunk.document.name,
-      score: cosine(queryEmbedding, JSON.parse(chunk.embedding) as number[]),
+      score: cosine(queryEmbedding, parseEmbedding(chunk.embedding)),
     }))
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
