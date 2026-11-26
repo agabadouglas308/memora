@@ -1,4 +1,4 @@
-import { parseEmbedding } from "./rag";
+import { parseEmbedding, stem } from "./rag";
 
 export type IndexedChunk = { id: string; embedding: string; text: string };
 
@@ -24,7 +24,7 @@ function signatureOf(chunks: IndexedChunk[]) {
 }
 
 export function tokensOf(text: string) {
-  return new Set(text.toLowerCase().match(/[a-z0-9][a-z0-9'-]{1,}/g) ?? []);
+  return new Set((text.toLowerCase().match(/[a-z0-9][a-z0-9'-]{1,}/g) ?? []).map(stem));
 }
 
 export function embeddingFor(id: string, value: string) {

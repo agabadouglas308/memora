@@ -18,7 +18,7 @@ describe("default provider", () => {
     const provider = await import("./provider");
 
     expect(provider.usesOllama()).toBe(false);
-    expect(provider.embeddingModelName).toBe("hash-384");
+    expect(provider.embeddingModelName).toBe("hash-384-v2");
     expect((await provider.embedTexts(["Atlas retrieval"]))[0]).toHaveLength(384);
 
     let answer = "";

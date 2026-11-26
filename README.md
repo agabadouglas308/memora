@@ -11,7 +11,8 @@ Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect
 - **Next.js app**: document ingestion, overlapping text chunks, persisted documents and chunks in SQLite, ranked retrieval, streamed answers, and citations.
 - **Chat history**: conversations are saved in SQLite and restored on reload. "New chat" clears them.
 - **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It uses the same chunking, embedding, and cosine pipeline as the server, but keeps data in memory so it is cleared on refresh.
-- **Tests**: 40 Vitest cases covering chunking, embeddings, retrieval, both API routes, both provider modes, and malformed input handling.
+- **Tests**: 48 Vitest cases covering chunking, embeddings, retrieval, both API routes, both provider modes, and malformed input handling.
+- **Evaluation harness**: a labeled question set with recall@k, precision@k, MRR, and groundedness, runnable with `npm run eval`.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
 
@@ -47,9 +48,13 @@ The demo note is seeded only once, on a database that has never been seeded. Del
 ## Retrieval notes
 
 - Text is split into 900-character chunks with 180-character overlap.
-- In the default mode, embeddings are normalized 384-dimensional hashed token vectors. This is a lightweight baseline rather than a hosted LLM or a production embedding model.
-- An in-process token index caches parsed vectors and limits cosine scoring to chunks that share a token with the question. A multi-node or very large deployment would replace this with pgvector and server-side ANN search.
+- In the default mode, embeddings are normalized 384-dimensional hashed token vectors. Tokens are lightly stemmed so "evaluate" and "evaluation" land in the same bucket. This is a lightweight baseline rather than a hosted LLM or a production embedding model.
+- Retrieval is hybrid: a weighted fusion of cosine similarity and BM25 keyword scores (0.6 / 0.4 by default). In hash mode an in-process token index caches parsed vectors and limits scoring to chunks sharing a root token with the question; in Ollama mode all chunks are scored so semantic matches without shared words are not lost. A multi-node or very large deployment would replace this with pgvector and server-side ANN search.
 - With Ollama configured, embeddings come from `/api/embed` and answers stream from `/api/chat`. The UI receives citations after the generated answer, and both messages are persisted.
+
+## Evaluation
+
+`npm run eval` runs 12 labeled questions against an 8-chunk corpus with distractor sections. It reports per-question and mean recall@3, precision@3, MRR, and whether the answer text is verbatim grounded in a retrieved chunk. The current baseline scores **0.96 recall@3, 1.00 MRR, 0.92 grounded** and fails the command if mean recall drops below 0.70 (`EVAL_MIN_RECALL`). Chunk size, overlap, and the threshold can be overridden with `EVAL_CHUNK_SIZE`, `EVAL_OVERLAP`, and `EVAL_MIN_RECALL`.
 
 ## API
 

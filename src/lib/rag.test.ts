@@ -5,7 +5,17 @@ import {
   cosine,
   embedText,
   parseEmbedding,
+  stem,
 } from "./rag";
+
+describe("stem", () => {
+  it("maps common morphological variants to the same root", () => {
+    expect(stem("evaluate")).toBe(stem("evaluation"));
+    expect(stem("related")).toBe(stem("relation"));
+    expect(stem("chunks")).toBe(stem("chunk"));
+    expect(stem("overlapping")).toBe("overlap");
+  });
+});
 
 describe("chunkText", () => {
   it("returns nothing for blank input", () => {

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "tsx scripts/evaluate.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -26,6 +27,7 @@
     "postcss": "^8",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^2.1.9"
   }

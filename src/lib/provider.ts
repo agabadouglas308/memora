@@ -6,7 +6,7 @@ const host = process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434";
 const chatModel = process.env.OLLAMA_MODEL;
 const embedModel = process.env.OLLAMA_EMBED_MODEL ?? "nomic-embed-text";
 
-export const embeddingModelName = chatModel ? embedModel : "hash-384";
+export const embeddingModelName = chatModel ? embedModel : "hash-384-v2";
 export const usesOllama = () => Boolean(chatModel);
 
 function endpoint(path: string) {

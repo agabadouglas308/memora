@@ -45,6 +45,6 @@ describe("embeddingFor", () => {
 
 describe("tokensOf", () => {
   it("lowercases and extracts word tokens", () => {
-    expect([...tokensOf("Overlapping CHUNKS!")]).toEqual(["overlapping", "chunks"]);
+    expect([...tokensOf("Overlapping CHUNKS!")]).toEqual(["overlap", "chunk"]);
   });
 });

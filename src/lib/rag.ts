@@ -25,6 +25,26 @@ export function chunkText(text: string, size = 900, overlap = 180) {
   return chunks;
 }
 
+const SUFFIXES = [
+  ["ingly", ""], ["edly", ""], ["ing", ""], ["ies", "y"], ["es", ""],
+  ["ed", ""], ["ions", ""], ["ion", ""], ["s", ""],
+] as const;
+
+export function stem(token: string) {
+  if (token.length <= 4) return token;
+  let value = token;
+  for (const [suffix, replacement] of SUFFIXES) {
+    if (value.endsWith(suffix) && value.length - suffix.length + replacement.length >= 3) {
+      value = value.slice(0, -suffix.length) + replacement;
+      break;
+    }
+  }
+  if (value.length > 3 && value[value.length - 1] === value[value.length - 2]) {
+    value = value.slice(0, -1);
+  }
+  return value.length > 3 && value.endsWith("e") ? value.slice(0, -1) : value;
+}
+
 function hashString(value: string) {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -42,8 +62,9 @@ export function embedText(text: string, dimensions = 384): number[] {
 
   for (const token of tokens) {
     if (STOP_WORDS.has(token) || token.length < 3) continue;
-    const index = hashString(token) % dimensions;
-    const sign = (hashString(`${token}:sign`) & 1) === 0 ? 1 : -1;
+    const root = stem(token);
+    const index = hashString(root) % dimensions;
+    const sign = (hashString(`${root}:sign`) & 1) === 0 ? 1 : -1;
     vector[index] += sign;
   }
 
@@ -84,7 +105,9 @@ export function answerFromContext(question: string, contexts: Array<{ text: stri
   }
 
   const questionTerms = new Set(
-    (question.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) ?? []).filter((term) => !STOP_WORDS.has(term))
+    (question.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) ?? [])
+      .filter((term) => !STOP_WORDS.has(term))
+      .map(stem)
   );
 
   const sentences = contexts
@@ -98,7 +121,7 @@ export function answerFromContext(question: string, contexts: Array<{ text: stri
           sentence,
           documentName: context.documentName,
           score: (sentence.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) ?? [])
-            .filter((term) => questionTerms.has(term)).length,
+            .filter((term) => questionTerms.has(stem(term))).length,
         }))
     )
     .filter((item) => item.score > 0)
