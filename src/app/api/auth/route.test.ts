@@ -90,6 +90,14 @@ describe("login", () => {
     expect(response.status).toBe(200);
     expect(auth.setSessionCookie).toHaveBeenCalledTimes(1);
   });
+
+  it("rate limits repeated attempts", async () => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await login(post({ email: "flood@example.com", password: "password123" }));
+    }
+    const response = await login(post({ email: "flood@example.com", password: "password123" }));
+    expect(response.status).toBe(429);
+  });
 });
 
 describe("me and logout", () => {

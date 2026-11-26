@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSession, hashPassword, setSessionCookie } from "@/lib/auth";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
     ? (body as { password: string }).password
     : "";
 
+  if (!rateLimit(clientKey(request, "register", email)).allowed) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
   }

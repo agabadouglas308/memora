@@ -12,10 +12,28 @@ Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect
 - **Accounts**: email and password registration, salted scrypt hashes, signed HTTP-only session cookies, and per-user scoping on every document, chunk, and message query.
 - **Chat history**: conversations are saved in SQLite and restored on reload. "New chat" clears them.
 - **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It uses the same chunking, embedding, and cosine pipeline as the server, but keeps data in memory so it is cleared on refresh.
-- **Tests**: 64 Vitest cases covering chunking, embeddings, retrieval, authentication, all API routes, both provider modes, and malformed input handling.
+- **Tests**: 71 Vitest cases covering chunking, embeddings, retrieval, authentication, rate limiting, all API routes, both provider modes, and malformed input handling.
 - **Evaluation harness**: a labeled question set with recall@k, precision@k, MRR, and groundedness, runnable with `npm run eval`.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
+
+## Architecture
+
+```
+Browser ──session cookie──> Next.js API ──Prisma──> SQLite
+   │                            │
+   │                       auth: scrypt + HMAC
+   │                            │
+   └──streamed answer──── hybrid retrieval
+                          ├── hashed or Ollama embeddings (cosine)
+                          └── BM25 keyword scores
+                                   │
+                            top 5 chunks ──> extractive or Ollama generation
+                                   │
+                            citations + stored messages
+```
+
+Every query is scoped to the signed-in user. The static demo omits auth and persistence but runs the same chunking, embedding, and hybrid scoring code in the browser.
 
 ## Run the full app locally
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSession, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -16,6 +17,10 @@ export async function POST(request: NextRequest) {
   const password = typeof (body as { password?: unknown })?.password === "string"
     ? (body as { password: string }).password
     : "";
+
+  if (!rateLimit(clientKey(request, "login", email)).allowed) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
 
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
   const valid = user ? verifyPassword(user.passwordHash, password) : false;

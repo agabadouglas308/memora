@@ -55,6 +55,7 @@ export default function Workspace() {
   const [uploading, setUploading] = useState(false);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -330,9 +331,19 @@ export default function Workspace() {
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#92958b]">Library</p>
               <span className="rounded-full bg-[#dedfd8] px-2 py-0.5 text-[10px] font-bold text-[#777a72]">{documents.length}</span>
             </div>
+            <label className="flex items-center gap-2 rounded-[8px] border border-[#d1d3cb] bg-white px-2.5 py-2 text-[#969990]">
+              <Search size={13} />
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Filter documents"
+                aria-label="Filter documents"
+                className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aaaDA3]"
+              />
+            </label>
           </div>
           <div className="flex-1 overflow-y-auto px-3">
-            {documents.map((document) => (
+            {documents.filter((document) => document.name.toLowerCase().includes(filter.trim().toLowerCase())).map((document) => (
               <div key={document.id} className="group mb-1 flex items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 hover:bg-white/70">
                 <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-[#dcddd5] bg-white text-[#777b70]"><FileText size={15} /></div>
                 <div className="min-w-0 flex-1">
@@ -360,7 +371,6 @@ export default function Workspace() {
               <div><p className="text-[13px] font-semibold">Knowledge chat</p><p className="mt-0.5 hidden text-[10px] text-[#969990] sm:block">Grounded answers across {documents.length} documents</p></div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="hidden items-center gap-2 rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] sm:flex"><Search size={13} />Search</button>
               <button disabled={loading} onClick={async () => { runId.current += 1; try { await fetch("/api/chat", { method: "DELETE" }); } catch {} setMessages([]); setCitations([]); }} className="rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] hover:bg-[#f7f7f4] disabled:opacity-50">New chat</button>
             </div>
           </header>
