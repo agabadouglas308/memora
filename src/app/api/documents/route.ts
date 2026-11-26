@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, writeFile, unlink, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +11,17 @@ import { embedTexts, embeddingModelName } from "@/lib/provider";
 
 export const runtime = "nodejs";
 const execFileAsync = promisify(execFile);
+const SEED_KEY = "demoSeeded";
+
+async function claimSeed() {
+  try {
+    await prisma.appMeta.create({ data: { key: SEED_KEY, value: "true" } });
+    return true;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") return false;
+    throw error;
+  }
+}
 
 async function extractPdf(buffer: Buffer) {
   const directory = await mkdtemp(path.join(tmpdir(), "memora-pdf-"));
@@ -26,22 +38,25 @@ async function extractPdf(buffer: Buffer) {
   }
 }
 
-async function addChunks(documentId: string, text: string) {
-  const chunks = chunkText(text);
-  if (!chunks.length) return 0;
-  const vectors = await embedTexts(chunks);
-  await Promise.all(chunks.map((chunk, position) =>
-    prisma.chunk.create({
-      data: {
-        documentId,
-        text: chunk,
-        position,
-        embedding: JSON.stringify(vectors[position]),
-        model: embeddingModelName,
-      },
-    })
-  ));
-  return chunks.length;
+async function createDocumentWithChunks(data: { name: string; type: string; size: number; text: string }) {
+  const id = randomUUID();
+  const chunks = chunkText(data.text);
+  const vectors = chunks.length ? await embedTexts(chunks) : [];
+  await prisma.$transaction([
+    prisma.document.create({ data: { id, ...data } }),
+    ...chunks.map((chunk, position) =>
+      prisma.chunk.create({
+        data: {
+          documentId: id,
+          text: chunk,
+          position,
+          embedding: JSON.stringify(vectors[position]),
+          model: embeddingModelName,
+        },
+      })
+    ),
+  ]);
+  return { id, chunkCount: chunks.length };
 }
 
 const DEMO_DOCUMENT = `# Atlas Research Notes
@@ -64,29 +79,37 @@ The retrieval layer should be evaluated with a labeled set of questions and sour
 Every document and query result should be scoped to the owning workspace. Production deployments should add authentication, signed upload URLs, row-level database policies, and prompt-injection safeguards.`;
 
 export async function GET() {
+  const claimed = await claimSeed();
   const count = await prisma.document.count();
-  if (count === 0) {
-    const document = await prisma.document.create({
-      data: { name: "Atlas research notes.md", type: "text/markdown", size: DEMO_DOCUMENT.length, text: DEMO_DOCUMENT },
+  if (count === 0 && claimed) {
+    await createDocumentWithChunks({
+      name: "Atlas research notes.md",
+      type: "text/markdown",
+      size: DEMO_DOCUMENT.length,
+      text: DEMO_DOCUMENT,
     });
-    await addChunks(document.id, DEMO_DOCUMENT);
-  } else {
-    const documentsWithoutChunks = await prisma.document.findMany({
-      where: { chunks: { none: {} } },
-      select: { id: true, text: true },
-    });
-    await Promise.all(documentsWithoutChunks.map((document) => addChunks(document.id, document.text)));
   }
 
   const documents = await prisma.document.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { chunks: true } } },
   });
-  return NextResponse.json({ documents });
+  const activeChunkCount = await prisma.chunk.count({ where: { model: embeddingModelName } });
+  const warning = documents.length > 0 && activeChunkCount === 0
+    ? `No chunks match the active embedding model (${embeddingModelName}). Re-upload your documents.`
+    : null;
+
+  return NextResponse.json({ documents, warning });
 }
 
 export async function POST(request: NextRequest) {
-  const form = await request.formData();
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Expected a multipart form upload" }, { status: 400 });
+  }
+
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
@@ -100,18 +123,25 @@ export async function POST(request: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  let text = /\.pdf$/i.test(file.name) || file.type === "application/pdf"
-    ? await extractPdf(buffer)
-    : buffer.toString("utf8");
+  let text: string;
+  try {
+    text = /\.pdf$/i.test(file.name) || file.type === "application/pdf"
+      ? await extractPdf(buffer)
+      : buffer.toString("utf8");
+  } catch {
+    return NextResponse.json({ error: "Could not extract text from that PDF" }, { status: 422 });
+  }
   text = text.replace(/\0/g, "").trim();
   if (text.length < 20) return NextResponse.json({ error: "The file contains no readable text" }, { status: 422 });
 
-  const document = await prisma.document.create({
-    data: { name: file.name, type: file.type || "text/plain", size: file.size, text },
+  const { id, chunkCount } = await createDocumentWithChunks({
+    name: file.name,
+    type: file.type || "text/plain",
+    size: file.size,
+    text,
   });
-  const chunkCount = await addChunks(document.id, text);
 
   return NextResponse.json({
-    document: { id: document.id, name: document.name, type: document.type, size: document.size, chunkCount },
+    document: { id, name: file.name, type: file.type || "text/plain", size: file.size, chunkCount },
   }, { status: 201 });
 }

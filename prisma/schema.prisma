@@ -28,6 +28,12 @@ model Chunk {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
+  @@index([model])
+}
+
+model AppMeta {
+  key   String @id
+  value String
 }
 
 model Message {

@@ -10,8 +10,10 @@ const prisma = vi.hoisted(() => ({
   },
   chunk: {
     create: vi.fn(),
-    findMany: vi.fn(),
+    count: vi.fn(),
   },
+  appMeta: { create: vi.fn() },
+  $transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma }));
@@ -27,33 +29,64 @@ function uploadRequest(file: File) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prisma.document.create.mockResolvedValue({ id: "doc-1", name: "notes.txt", type: "text/plain", size: 10 });
-  prisma.document.deleteMany.mockResolvedValue({ count: 1 });
-  prisma.chunk.create.mockResolvedValue({ id: "chunk-1" });
+  prisma.appMeta.create.mockResolvedValue({ key: "demoSeeded", value: "true" });
+  prisma.document.count.mockResolvedValue(0);
+  prisma.document.create.mockResolvedValue({});
   prisma.document.findMany.mockResolvedValue([]);
+  prisma.document.deleteMany.mockResolvedValue({ count: 1 });
+  prisma.chunk.create.mockResolvedValue({});
+  prisma.chunk.count.mockResolvedValue(0);
+  prisma.$transaction.mockImplementation(async (operations: Promise<unknown>[]) => Promise.all(operations));
 });
 
 describe("GET /api/documents", () => {
-  it("seeds a demo document and chunks an empty database", async () => {
-    prisma.document.count.mockResolvedValue(0);
+  it("seeds the demo document once on a fresh database", async () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
     expect(prisma.document.create).toHaveBeenCalledTimes(1);
     expect(prisma.chunk.create.mock.calls.length).toBeGreaterThan(1);
-    expect((await response.json()).documents).toEqual([]);
   });
 
-  it("does not reseed when documents already exist", async () => {
-    prisma.document.count.mockResolvedValue(2);
-    prisma.document.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValue([{ id: "doc-1", name: "notes.txt", _count: { chunks: 3 } }]);
+  it("does not seed when another request already claimed the seed", async () => {
+    prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
 
     await GET();
 
     expect(prisma.document.create).not.toHaveBeenCalled();
     expect(prisma.chunk.create).not.toHaveBeenCalled();
+  });
+
+  it("does not reseed after the last document was deleted", async () => {
+    prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
+    prisma.document.count.mockResolvedValue(0);
+
+    const response = await GET();
+
+    expect((await response.json()).documents).toEqual([]);
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
+  it("does not seed an existing library", async () => {
+    prisma.document.count.mockResolvedValue(2);
+    prisma.document.findMany.mockResolvedValue([
+      { id: "doc-1", name: "notes.txt", _count: { chunks: 3 } },
+    ]);
+
+    await GET();
+
+    expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
+  it("warns when no chunks match the active embedding model", async () => {
+    prisma.document.count.mockResolvedValue(1);
+    prisma.document.findMany.mockResolvedValue([
+      { id: "doc-1", name: "notes.txt", _count: { chunks: 3 } },
+    ]);
+    prisma.chunk.count.mockResolvedValue(0);
+
+    const data = await (await GET()).json();
+    expect(data.warning).toContain("Re-upload your documents");
   });
 });
 
@@ -62,6 +95,15 @@ describe("POST /api/documents", () => {
     const response = await POST(new NextRequest("http://localhost/api/documents", { method: "POST", body: new FormData() }));
     expect(response.status).toBe(400);
     expect(prisma.document.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed multipart body", async () => {
+    const response = await POST(new NextRequest("http://localhost/api/documents", {
+      method: "POST",
+      body: "not a form",
+      headers: { "Content-Type": "application/json" },
+    }));
+    expect(response.status).toBe(400);
   });
 
   it("rejects unsupported file types", async () => {
@@ -76,7 +118,7 @@ describe("POST /api/documents", () => {
     expect(response.status).toBe(400);
   });
 
-  it("stores a text upload and its chunks", async () => {
+  it("stores a text upload and its chunks atomically", async () => {
     const file = new File(
       ["Atlas stores research notes. Retrieval finds the relevant passages. Overlap keeps context."],
       "notes.txt",
@@ -85,8 +127,7 @@ describe("POST /api/documents", () => {
     const response = await POST(uploadRequest(file));
 
     expect(response.status).toBe(201);
-    expect(prisma.document.create).toHaveBeenCalledTimes(1);
-    expect(prisma.chunk.create).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect((await response.json()).document.name).toBe("notes.txt");
   });
 });

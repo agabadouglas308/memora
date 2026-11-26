@@ -148,7 +148,9 @@ Every document and query result should be scoped to the owning workspace. Produc
     function extractAnswer(query, passages) {
       const terms = new Set((query.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) || []).filter((term) => !STOP_WORDS.has(term)));
       const sentences = passages.flatMap((passage) => passage.text.replace(/\n+/g, " ").split(/(?<=[.!?])\s+/).map((sentence) => sentence.replace(/^#+\s*/, "").trim()).filter((sentence) => sentence.length > 24).map((sentence) => ({ sentence, score: (sentence.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) || []).filter((term) => terms.has(term)).length }))).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
-      return sentences.length ? sentences.map((item) => item.sentence.replace(/\s+/g, " ")).join(" ") : "I could not find relevant information in the uploaded documents. Try rephrasing your question or add a related document.";
+      if (sentences.length) return sentences.map((item) => item.sentence.replace(/\s+/g, " ")).join(" ");
+      if (passages.length) return `Based on your knowledge base, ${passages.slice(0, 2).map((passage) => passage.text.slice(0, 420).replace(/\s+/g, " ").trim()).join(" ")}`;
+      return "I could not find relevant information in the uploaded documents. Try rephrasing your question or add a related document.";
     }
     function showSources(passages) {
       const list = document.getElementById("source-list"); list.className = "source-list"; list.replaceChildren();
@@ -178,19 +180,19 @@ Every document and query result should be scoped to the owning workspace. Produc
       if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); document.getElementById("ask-form").requestSubmit(); }
     });
     document.querySelectorAll("[data-question]").forEach((button) => button.addEventListener("click", () => ask(button.dataset.question)));
-    document.getElementById("new-chat").addEventListener("click", () => {
-      const messages = document.getElementById("messages"); messages.replaceChildren(document.createElement("div"));
-      location.reload();
-    });
+    document.getElementById("new-chat").addEventListener("click", () => location.reload());
     const picker = document.getElementById("file-input");
     document.getElementById("upload-button").addEventListener("click", () => picker.click());
     document.getElementById("upload-inline").addEventListener("click", () => picker.click());
     picker.addEventListener("change", async () => {
       const file = picker.files && picker.files[0]; if (!file) return;
+      if (!/\.(txt|md|markdown)$/i.test(file.name) && !["text/plain", "text/markdown"].includes(file.type)) {
+        alert("Upload a text or Markdown file."); picker.value = ""; return;
+      }
       if (file.size > 2 * 1024 * 1024) { alert("Maximum file size for the static demo is 2 MB."); picker.value = ""; return; }
       const text = await file.text();
       if (text.trim().length < 20) { alert("This file has no readable text."); picker.value = ""; return; }
-      documents.unshift({ id: `${Date.now()}`, name: file.name, text }); renderDocs(); picker.value = "";
+      documents.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: file.name, text }); renderDocs(); picker.value = "";
     });
     renderDocs();
   </script>

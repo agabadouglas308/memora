@@ -6,6 +6,12 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function enableOllama() {
+  vi.stubEnv("OLLAMA_MODEL", "llama3.2");
+  vi.stubEnv("OLLAMA_HOST", "http://localhost:11434");
+  vi.resetModules();
+}
+
 describe("default provider", () => {
   it("embeds locally and streams an extractive answer", async () => {
     vi.resetModules();
@@ -27,9 +33,7 @@ describe("default provider", () => {
 
 describe("Ollama provider", () => {
   it("embeds through the Ollama API", async () => {
-    vi.stubEnv("OLLAMA_MODEL", "llama3.2");
-    vi.stubEnv("OLLAMA_HOST", "http://localhost:11434");
-    vi.resetModules();
+    enableOllama();
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }), { status: 200 })
     );
@@ -44,10 +48,22 @@ describe("Ollama provider", () => {
     );
   });
 
-  it("streams generated tokens from NDJSON", async () => {
-    vi.stubEnv("OLLAMA_MODEL", "llama3.2");
-    vi.resetModules();
-    const body = '{"response":"Atlas "}\n{"response":"is a platform."}\n{"done":true}\n';
+  it("rejects invalid embedding vectors", async () => {
+    enableOllama();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ embeddings: [["bad", null]] }), { status: 200 })
+    ));
+    const provider = await import("./provider");
+    await expect(provider.embedTexts(["hello"])).rejects.toThrow("invalid vector");
+  });
+
+  it("streams tokens from chat NDJSON, including the final unterminated line", async () => {
+    enableOllama();
+    const body = [
+      '{"model":"llama3.2","message":{"role":"assistant","content":"Atlas "},"done":false}',
+      "not json",
+      '{"model":"llama3.2","message":{"role":"assistant","content":"is a platform."},"done":true}',
+    ].join("\n");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status: 200 })));
 
     const provider = await import("./provider");
@@ -58,5 +74,16 @@ describe("Ollama provider", () => {
       answer += token;
     }
     expect(answer).toBe("Atlas is a platform.");
+  });
+
+  it("also accepts the generate endpoint response shape", async () => {
+    enableOllama();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response('{"response":"Legacy shape"}', { status: 200 })
+    ));
+    const provider = await import("./provider");
+    let answer = "";
+    for await (const token of provider.streamAnswer("Question", [])) answer += token;
+    expect(answer).toBe("Legacy shape");
   });
 });

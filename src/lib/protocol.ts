@@ -1,0 +1,1 @@
+export const CITATION_MARKER = "\u0000__MEMORA_CITATIONS__";

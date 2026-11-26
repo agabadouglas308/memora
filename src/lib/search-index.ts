@@ -9,11 +9,16 @@ let entries = new Map<string, Entry>();
 
 function signatureOf(chunks: IndexedChunk[]) {
   let hash = 2166136261;
-  for (const chunk of chunks) {
-    for (let i = 0; i < chunk.id.length; i++) {
-      hash ^= chunk.id.charCodeAt(i);
+  const mix = (value: string) => {
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
       hash = Math.imul(hash, 16777619);
     }
+  };
+  for (const chunk of chunks) {
+    mix(chunk.id);
+    mix(chunk.text);
+    mix(chunk.embedding);
   }
   return `${chunks.length}:${hash >>> 0}`;
 }

@@ -5,6 +5,7 @@ import {
   ArrowUp, BookOpen, Check, ChevronRight, FileText, Link2, Menu,
   Layers, MoreHorizontal, Plus, Search, Trash2, X,
 } from "lucide-react";
+import { CITATION_MARKER } from "@/lib/protocol";
 
 type DocumentItem = {
   id: string;
@@ -43,23 +44,34 @@ export default function Workspace() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [citations, setCitations] = useState<Citation[]>([]);
+  const [warning, setWarning] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const runId = useRef(0);
 
   async function loadDocuments() {
-    const response = await fetch("/api/documents");
-    const data = await response.json();
-    setDocuments(data.documents ?? []);
+    try {
+      const response = await fetch("/api/documents");
+      const data = await response.json();
+      setDocuments(data.documents ?? []);
+      setWarning(data.warning ?? null);
+    } catch {
+      setWarning("Could not load the document library. Refresh to try again.");
+    }
   }
 
   async function loadHistory() {
-    const response = await fetch("/api/chat");
-    const data = await response.json();
-    const restored = (data.messages ?? []) as Message[];
-    setMessages(restored);
-    const lastAssistant = [...restored].reverse().find((message) => message.role === "assistant");
-    if (lastAssistant?.citations) setCitations(lastAssistant.citations);
+    try {
+      const response = await fetch("/api/chat");
+      const data = await response.json();
+      const restored = (data.messages ?? []) as Message[];
+      setMessages(restored);
+      const lastAssistant = [...restored].reverse().find((message) => message.role === "assistant");
+      if (lastAssistant?.citations) setCitations(lastAssistant.citations);
+    } catch {
+      // A failed history load should not block asking a new question.
+    }
   }
 
   useEffect(() => { loadDocuments(); loadHistory(); }, []);
@@ -67,71 +79,114 @@ export default function Workspace() {
 
   async function upload(file: File) {
     setUploading(true);
-    const form = new FormData();
-    form.append("file", file);
-    const response = await fetch("/api/documents", { method: "POST", body: form });
-    if (response.ok) await loadDocuments();
-    else {
-      const data = await response.json();
-      alert(data.error ?? "Upload failed");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/documents", { method: "POST", body: form });
+      if (response.ok) await loadDocuments();
+      else {
+        let message = "Upload failed";
+        try {
+          const data = await response.json();
+          message = data.error ?? message;
+        } catch {
+          // Keep the generic message when the server did not send JSON.
+        }
+        alert(message);
+      }
+    } catch {
+      alert("Upload failed. Check your connection and try again.");
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }
 
   async function removeDocument(id: string) {
-    await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    try {
+      await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    } catch {
+      // The library refresh below reflects the current state either way.
+    }
     await loadDocuments();
+  }
+
+  function setLastAssistant(content: string) {
+    setMessages((current) => {
+      if (!current.length || current[current.length - 1].role !== "assistant") return current;
+      const next = [...current];
+      next[next.length - 1] = { role: "assistant", content };
+      return next;
+    });
   }
 
   async function ask(value = question) {
     const trimmed = value.trim();
     if (!trimmed || loading) return;
+    const id = ++runId.current;
+    const failure = "I could not answer that request. Please try again.";
+
     setQuestion("");
+    setCitations([]);
     setLoading(true);
     setMessages((current) => [...current, { role: "user", content: trimmed }]);
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: trimmed }),
-    });
-
-    if (!response.ok || !response.body) {
-      setLoading(false);
-      setMessages((current) => [...current, { role: "assistant", content: "I could not answer that request. Please try again." }]);
+    let response: Response;
+    try {
+      response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: trimmed }),
+      });
+    } catch {
+      if (id === runId.current) {
+        setLastAssistant(failure);
+        setLoading(false);
+      }
       return;
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let content = "";
-    setMessages((current) => [...current, { role: "assistant", content: "" }]);
-
-    while (true) {
-      const { done, value: chunk } = await reader.read();
-      if (done) break;
-      content += decoder.decode(chunk, { stream: true });
-      const marker = content.indexOf("__CITATIONS__");
-      if (marker !== -1) {
-        const answer = content.slice(0, marker);
-        try {
-          const found = JSON.parse(content.slice(marker + "__CITATIONS__".length)) as Citation[];
-          setCitations(found);
-        } catch {}
-        setMessages((current) => {
-          const next = [...current];
-          next[next.length - 1] = { role: "assistant", content: answer };
-          return next;
-        });
-      } else {
-        setMessages((current) => {
-          const next = [...current];
-          next[next.length - 1] = { role: "assistant", content };
-          return next;
-        });
+    if (!response.ok || !response.body) {
+      if (id === runId.current) {
+        setLastAssistant(failure);
+        setLoading(false);
       }
+      return;
     }
-    setLoading(false);
+
+    try {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let content = "";
+      setMessages((current) => [...current, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value: chunk } = await reader.read();
+        content += decoder.decode(chunk, { stream: !done });
+        if (id !== runId.current) return;
+
+        const marker = content.indexOf(CITATION_MARKER);
+        if (marker !== -1) {
+          const answer = content.slice(0, marker);
+          try {
+            const found = JSON.parse(content.slice(marker + CITATION_MARKER.length)) as Citation[];
+            setCitations(found);
+          } catch {
+            // Keep whatever citations were already shown.
+          }
+          setLastAssistant(answer);
+        } else {
+          setLastAssistant(content);
+        }
+        if (done) break;
+      }
+    } catch {
+      if (id === runId.current) {
+        setLastAssistant(failure);
+        setCitations([]);
+      }
+    } finally {
+      if (id === runId.current) setLoading(false);
+    }
   }
 
   return (
@@ -151,7 +206,7 @@ export default function Workspace() {
             <button onClick={() => fileInput.current?.click()} className="flex h-11 w-full items-center gap-2.5 rounded-[10px] border border-[#d1d3cb] bg-white px-3 text-[13px] font-semibold shadow-sm transition hover:border-[#b7baaf]">
               <Plus size={16} />{uploading ? "Ingesting..." : "Add knowledge"}
             </button>
-            <input ref={fileInput} type="file" accept=".pdf,.txt,.md,.markdown" className="hidden" onChange={(event) => event.target.files?.[0] && upload(event.target.files[0])} />
+            <input ref={fileInput} type="file" accept=".pdf,.txt,.md,.markdown" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload(file); event.target.value = ""; }} />
           </div>
           <div className="mt-6 px-5">
             <div className="mb-2 flex items-center justify-between">
@@ -189,13 +244,14 @@ export default function Workspace() {
             </div>
             <div className="flex items-center gap-2">
               <button className="hidden items-center gap-2 rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] sm:flex"><Search size={13} />Search</button>
-              <button onClick={async () => { await fetch("/api/chat", { method: "DELETE" }); setMessages([]); setCitations([]); }} className="rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] hover:bg-[#f7f7f4]">New chat</button>
+              <button disabled={loading} onClick={async () => { runId.current += 1; try { await fetch("/api/chat", { method: "DELETE" }); } catch {} setMessages([]); setCitations([]); }} className="rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] hover:bg-[#f7f7f4] disabled:opacity-50">New chat</button>
             </div>
           </header>
 
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex-1 overflow-y-auto">
+                {warning && <p className="mx-auto mt-4 max-w-[760px] rounded-[8px] border border-[#e6d8bd] bg-[#fdf8ec] px-3 py-2 text-[12px] text-[#7a5c2e]">{warning}</p>}
                 {messages.length === 0 ? (
                   <div className="mx-auto flex h-full max-w-[760px] flex-col justify-center px-5 pb-16">
                     <div className="mb-7 grid h-11 w-11 place-items-center rounded-[12px] border border-[#e1e2dc] bg-[#f7f7f4]"><Layers size={19} strokeWidth={1.8} /></div>

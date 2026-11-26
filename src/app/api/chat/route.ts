@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { cosine } from "@/lib/rag";
 import { embedTexts, embeddingModelName, streamAnswer, usesOllama } from "@/lib/provider";
 import { candidateIds, embeddingFor } from "@/lib/search-index";
+import { CITATION_MARKER } from "@/lib/protocol";
 
 export const runtime = "nodejs";
 
@@ -16,9 +17,9 @@ function parseCitations(value: string) {
 }
 
 export async function GET() {
-  const messages = await prisma.message.findMany({ orderBy: { createdAt: "asc" }, take: 100 });
+  const messages = await prisma.message.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
   return NextResponse.json({
-    messages: messages.map((message) => ({
+    messages: messages.reverse().map((message) => ({
       role: message.role,
       content: message.content,
       citations: parseCitations(message.citations),
@@ -32,8 +33,14 @@ export async function DELETE() {
 }
 
 export async function POST(request: NextRequest) {
-  const { question } = await request.json();
-  if (!question || typeof question !== "string" || !question.trim()) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Expected a JSON body" }, { status: 400 });
+  }
+  const question = (body as { question?: unknown } | null)?.question;
+  if (typeof question !== "string" || !question.trim()) {
     return NextResponse.json({ error: "Question is required" }, { status: 400 });
   }
 
@@ -77,13 +84,14 @@ export async function POST(request: NextRequest) {
         controller.enqueue(encoder.encode(fallback));
       }
 
-      controller.enqueue(encoder.encode(`\n\n__CITATIONS__${JSON.stringify(citations)}`));
+      controller.enqueue(encoder.encode(`\n\n${CITATION_MARKER}${JSON.stringify(citations)}`));
       try {
         await prisma.message.create({ data: { role: "user", content: question, citations: "[]" } });
         await prisma.message.create({ data: { role: "assistant", content: answer, citations: JSON.stringify(citations) } });
-      } finally {
-        controller.close();
+      } catch {
+        // A failed history write must not break the answer stream.
       }
+      controller.close();
     },
   });
 

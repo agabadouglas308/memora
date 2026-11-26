@@ -26,6 +26,13 @@ describe("candidateIds", () => {
     const next = [...chunks, { id: "c", text: "Overlap was added later.", embedding: JSON.stringify(embedText("Overlap was added later.")) }];
     expect(candidateIds("overlap", next).has("c")).toBe(true);
   });
+
+  it("refreshes tokens when a chunk's text changes in place", () => {
+    expect(candidateIds("overlap", chunks).has("a")).toBe(true);
+    const changed = [{ ...chunks[0], text: "Deployment notes only." }, chunks[1]];
+    expect(candidateIds("overlap", changed).has("a")).toBe(false);
+    expect(candidateIds("deployment", changed).has("a")).toBe(true);
+  });
 });
 
 describe("embeddingFor", () => {

@@ -9,7 +9,7 @@ Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect
 - **Next.js app**: document ingestion, overlapping text chunks, persisted documents and chunks in SQLite, ranked retrieval, streamed answers, and citations.
 - **Chat history**: conversations are saved in SQLite and restored on reload. "New chat" clears them.
 - **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It uses the same chunking, embedding, and cosine pipeline as the server, but keeps data in memory so it is cleared on refresh.
-- **Tests**: 32 Vitest cases covering chunking, embeddings, retrieval, both API routes, and both provider modes.
+- **Tests**: 40 Vitest cases covering chunking, embeddings, retrieval, both API routes, both provider modes, and malformed input handling.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
 
@@ -34,7 +34,9 @@ By default Memora runs without any external service: hashed token vectors for re
 2. Copy `.env.example` to `.env.local` and set `OLLAMA_MODEL`. `OLLAMA_HOST` and `OLLAMA_EMBED_MODEL` can be overridden too.
 3. Restart the app and re-upload your documents.
 
-Chunks record which embedding model created them, and retrieval only considers chunks from the active model. Switching modes against an existing database therefore leaves old chunks out of results until they are re-ingested.
+Chunks record which embedding model created them, and retrieval only considers chunks from the active model. Switching modes against an existing database leaves old chunks out of results until they are re-ingested; the app shows a warning in the chat panel when that happens.
+
+The demo note is seeded only once, on a database that has never been seeded. Deleting every document leaves the library empty rather than recreating it. Documents and their chunks are written in one transaction, so an interrupted upload cannot leave a document with no chunks.
 
 ## Retrieval notes
 
