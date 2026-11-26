@@ -18,6 +18,9 @@ const prisma = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ prisma }));
 
+const auth = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
+vi.mock("@/lib/auth", () => auth);
+
 import { GET, POST } from "./route";
 import { DELETE } from "./[id]/route";
 
@@ -29,6 +32,7 @@ function uploadRequest(file: File) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  auth.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user@example.com" });
   prisma.appMeta.create.mockResolvedValue({ key: "demoSeeded", value: "true" });
   prisma.document.count.mockResolvedValue(0);
   prisma.document.create.mockResolvedValue({});
@@ -39,9 +43,19 @@ beforeEach(() => {
   prisma.$transaction.mockImplementation(async (operations: Promise<unknown>[]) => Promise.all(operations));
 });
 
+describe("authentication", () => {
+  it("rejects unauthenticated document access", async () => {
+    auth.getCurrentUser.mockResolvedValue(null);
+    expect((await GET(new NextRequest("http://localhost/api/documents"))).status).toBe(401);
+    expect((await POST(uploadRequest(new File(["some text content here"], "notes.txt", { type: "text/plain" })))).status).toBe(401);
+    expect((await DELETE(new NextRequest("http://localhost/api/documents/doc-1", { method: "DELETE" }), { params: { id: "doc-1" } })).status).toBe(401);
+    expect(prisma.document.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /api/documents", () => {
   it("seeds the demo document once on a fresh database", async () => {
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost/api/documents"));
 
     expect(response.status).toBe(200);
     expect(prisma.document.create).toHaveBeenCalledTimes(1);
@@ -51,7 +65,7 @@ describe("GET /api/documents", () => {
   it("does not seed when another request already claimed the seed", async () => {
     prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
 
-    await GET();
+    await GET(new NextRequest("http://localhost/api/documents"));
 
     expect(prisma.document.create).not.toHaveBeenCalled();
     expect(prisma.chunk.create).not.toHaveBeenCalled();
@@ -61,7 +75,7 @@ describe("GET /api/documents", () => {
     prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
     prisma.document.count.mockResolvedValue(0);
 
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost/api/documents"));
 
     expect((await response.json()).documents).toEqual([]);
     expect(prisma.document.create).not.toHaveBeenCalled();
@@ -73,7 +87,7 @@ describe("GET /api/documents", () => {
       { id: "doc-1", name: "notes.txt", _count: { chunks: 3 } },
     ]);
 
-    await GET();
+    await GET(new NextRequest("http://localhost/api/documents"));
 
     expect(prisma.document.create).not.toHaveBeenCalled();
   });
@@ -85,7 +99,7 @@ describe("GET /api/documents", () => {
     ]);
     prisma.chunk.count.mockResolvedValue(0);
 
-    const data = await (await GET()).json();
+    const data = await (await GET(new NextRequest("http://localhost/api/documents"))).json();
     expect(data.warning).toContain("Re-upload your documents");
   });
 });
@@ -146,6 +160,6 @@ describe("DELETE /api/documents/:id", () => {
       params: { id: "doc-1" },
     });
     expect(response.status).toBe(204);
-    expect(prisma.document.deleteMany).toHaveBeenCalledWith({ where: { id: "doc-1" } });
+    expect(prisma.document.deleteMany).toHaveBeenCalledWith({ where: { id: "doc-1", userId: "user-1" } });
   });
 });

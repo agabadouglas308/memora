@@ -2,16 +2,17 @@
 
 [![CI](https://github.com/agabadouglas308/memora/actions/workflows/ci.yml/badge.svg)](https://github.com/agabadouglas308/memora/actions/workflows/ci.yml)
 
-Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect the source passages behind each answer.
+Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect the source passages behind each answer. Accounts keep each user's documents and conversations separate.
 
 **Live static demo:** https://agabadouglas308.github.io/second-brain/
 
 ## What is here
 
 - **Next.js app**: document ingestion, overlapping text chunks, persisted documents and chunks in SQLite, ranked retrieval, streamed answers, and citations.
+- **Accounts**: email and password registration, salted scrypt hashes, signed HTTP-only session cookies, and per-user scoping on every document, chunk, and message query.
 - **Chat history**: conversations are saved in SQLite and restored on reload. "New chat" clears them.
 - **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It uses the same chunking, embedding, and cosine pipeline as the server, but keeps data in memory so it is cleared on refresh.
-- **Tests**: 48 Vitest cases covering chunking, embeddings, retrieval, both API routes, both provider modes, and malformed input handling.
+- **Tests**: 64 Vitest cases covering chunking, embeddings, retrieval, authentication, all API routes, both provider modes, and malformed input handling.
 - **Evaluation harness**: a labeled question set with recall@k, precision@k, MRR, and groundedness, runnable with `npm run eval`.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
@@ -27,11 +28,17 @@ npm test
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The document API seeds a sample Atlas research note into an empty database.
+Open [http://localhost:3000](http://localhost:3000), register an account, and the document API seeds a sample Atlas research note into your empty library.
+
+Set `SESSION_SECRET` (see `.env.example`) for real deployments. Without it, development uses a fixed fallback secret; production refuses to start.
 
 ## Run with Docker
 
 `docker compose up --build` starts the app on port 3000 with `pdftotext` included and the SQLite schema created on first boot. The database lives in a named volume so it survives container restarts.
+
+## Authentication
+
+Passwords are hashed with scrypt and a random salt. Sessions are HMAC-signed cookies containing a user id and expiry, marked `httpOnly`, `SameSite=Lax`, and `Secure` in production. Every document, chunk, and message query is scoped to the signed-in user; the API returns 401 for anonymous requests and never exposes another user's data. The first account created inherits any documents from an older, unauthenticated database.
 
 ## Optional: use a real model
 
@@ -60,9 +67,14 @@ The demo note is seeded only once, on a database that has never been seeded. Del
 
 | Route | Methods | Purpose |
 | --- | --- | --- |
+| `/api/auth/register`, `/api/auth/login` | POST | Create an account or sign in |
+| `/api/auth/logout` | POST | Clear the session |
+| `/api/auth/me` | GET | Read the signed-in user |
 | `/api/documents` | GET, POST | List documents and seed the demo note; upload a file |
 | `/api/documents/:id` | DELETE | Remove a document |
 | `/api/chat` | GET, POST, DELETE | Read history, ask a question, clear history |
+
+All routes except registration and login require a session.
 
 ## Deploy the static demo
 

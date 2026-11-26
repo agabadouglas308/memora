@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import {
   ArrowUp, BookOpen, Check, ChevronRight, FileText, Link2, Menu,
-  Layers, MoreHorizontal, Plus, Search, Trash2, X,
+  Layers, Plus, Search, Trash2, X,
 } from "lucide-react";
 import { CITATION_MARKER } from "@/lib/protocol";
+
+type User = { id: string; email: string };
 
 type DocumentItem = {
   id: string;
@@ -38,6 +41,13 @@ const suggestions = [
 ];
 
 export default function Workspace() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
@@ -74,8 +84,61 @@ export default function Workspace() {
     }
   }
 
-  useEffect(() => { loadDocuments(); loadHistory(); }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+          await Promise.all([loadDocuments(), loadHistory()]);
+        }
+      } catch {
+        // Show the sign-in screen if the session check failed.
+      } finally {
+        setAuthChecked(true);
+      }
+    })();
+  }, []);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const response = await fetch(`/api/auth/${authMode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setAuthError(data.error ?? "Could not continue. Please try again.");
+        return;
+      }
+      setUser(data.user);
+      setPassword("");
+      await Promise.all([loadDocuments(), loadHistory()]);
+    } catch {
+      setAuthError("Check your connection and try again.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function logout() {
+    runId.current += 1;
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Clear local state regardless of the network result.
+    }
+    setUser(null);
+    setDocuments([]);
+    setMessages([]);
+    setCitations([]);
+  }
 
   async function upload(file: File) {
     setUploading(true);
@@ -189,6 +252,60 @@ export default function Workspace() {
     }
   }
 
+  if (!authChecked) {
+    return <main className="grid h-[100dvh] place-items-center bg-[#f7f7f4] text-[13px] text-[#858980]">Loading Memora...</main>;
+  }
+
+  if (!user) {
+    return (
+      <main className="grid h-[100dvh] place-items-center bg-[#f7f7f4] px-5 text-[#171816]">
+        <form onSubmit={submitAuth} className="w-full max-w-[380px] rounded-[16px] border border-[#dedfd8] bg-white p-6">
+          <div className="mb-6 flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#1d201b] text-[#dfff6d]"><Layers size={16} /></div>
+            <span className="text-[17px] font-semibold tracking-[-0.02em]">Memora</span>
+          </div>
+          <h1 className="text-[24px] font-semibold tracking-[-0.03em]">{authMode === "login" ? "Welcome back" : "Create your workspace"}</h1>
+          <p className="mt-1 text-[12px] text-[#858980]">Your documents and conversations stay in your own workspace.</p>
+          <label className="mt-6 block text-[11px] font-semibold" htmlFor="auth-email">Email</label>
+          <input
+            id="auth-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            className="mt-1.5 h-10 w-full rounded-[9px] border border-[#dfe1da] px-3 text-[13px] outline-none focus:border-[#bdc0b5]"
+          />
+          <label className="mt-4 block text-[11px] font-semibold" htmlFor="auth-password">Password</label>
+          <input
+            id="auth-password"
+            type="password"
+            autoComplete={authMode === "login" ? "current-password" : "new-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="At least 8 characters"
+            className="mt-1.5 h-10 w-full rounded-[9px] border border-[#dfe1da] px-3 text-[13px] outline-none focus:border-[#bdc0b5]"
+          />
+          {authError && <p className="mt-3 text-[12px] text-[#8a3f32]">{authError}</p>}
+          <button
+            type="submit"
+            disabled={authLoading || !email.trim() || !password}
+            className="mt-6 h-10 w-full rounded-[9px] bg-[#1d201b] text-[13px] font-semibold text-[#dfff6d] disabled:bg-[#e7e8e2] disabled:text-[#aaaDA3]"
+          >
+            {authLoading ? "Please wait..." : authMode === "login" ? "Sign in" : "Create account"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(null); }}
+            className="mt-4 w-full text-center text-[11px] font-semibold text-[#777a72] hover:text-[#171816]"
+          >
+            {authMode === "login" ? "Need an account? Register" : "Already registered? Sign in"}
+          </button>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="h-[100dvh] overflow-hidden bg-[#f7f7f4] text-[#171816]">
       <div className="flex h-full">
@@ -228,9 +345,9 @@ export default function Workspace() {
           </div>
           <div className="border-t border-[#dedfd8] p-3">
             <div className="flex items-center gap-2.5 rounded-[9px] px-2 py-2">
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-[#dfff6d] text-[11px] font-bold">AD</div>
-              <div className="min-w-0 flex-1"><p className="text-[12px] font-semibold">Personal workspace</p><p className="text-[10px] text-[#969990]">Local demo</p></div>
-              <MoreHorizontal size={16} className="text-[#969990]" />
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#dfff6d] text-[11px] font-bold">{user.email.charAt(0).toUpperCase()}</div>
+              <div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold">{user.email}</p><p className="text-[10px] text-[#969990]">Your workspace</p></div>
+              <button onClick={logout} className="rounded-md p-1.5 text-[10px] font-semibold text-[#777a72] hover:bg-[#ecece6]" aria-label="Sign out">Sign out</button>
             </div>
           </div>
         </aside>

@@ -7,6 +7,15 @@ datasource db {
   url      = "file:./second-brain.db"
 }
 
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  createdAt    DateTime   @default(now())
+  documents    Document[]
+  messages     Message[]
+}
+
 model Document {
   id        String   @id @default(cuid())
   name      String
@@ -14,8 +23,12 @@ model Document {
   size      Int
   text      String
   status    String   @default("ready")
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   chunks    Chunk[]
+
+  @@index([userId])
 }
 
 model Chunk {
@@ -24,7 +37,7 @@ model Chunk {
   text       String
   position   Int
   embedding  String
-  model      String   @default("hash-384")
+  model      String   @default("hash-384-v2")
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
@@ -41,5 +54,9 @@ model Message {
   role      String
   content   String
   citations String   @default("[]")
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }

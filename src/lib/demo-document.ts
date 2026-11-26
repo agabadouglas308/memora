@@ -15,4 +15,4 @@ Chunk overlap preserves context that would otherwise be lost when a paragraph or
 The retrieval layer should be evaluated with a labeled set of questions and source passages. Useful metrics include recall@k, precision@k, and whether a generated answer is grounded in the retrieved evidence.
 
 ## Security
-Every document and query result should be scoped to the owning workspace. Production deployments should add authentication, signed upload URLs, row-level database policies, and prompt-injection safeguards.`;
+Every document and query result is scoped to the owning workspace. Further hardening would add signed upload URLs, row-level database policies, and prompt-injection safeguards.`;

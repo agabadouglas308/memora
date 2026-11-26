@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "3000:3000"
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:-memora-development-secret-change-me}
     volumes:
       - memora-data:/app/prisma
 

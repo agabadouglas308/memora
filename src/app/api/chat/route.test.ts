@@ -10,6 +10,9 @@ const prisma = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ prisma }));
 
+const auth = vi.hoisted(() => ({ getCurrentUser: vi.fn() }));
+vi.mock("@/lib/auth", () => auth);
+
 import { DELETE, GET, POST } from "./route";
 
 function ask(question: string) {
@@ -21,6 +24,7 @@ function ask(question: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  auth.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user@example.com" });
   prisma.message.create.mockResolvedValue({});
   prisma.message.findMany.mockResolvedValue([]);
   prisma.message.deleteMany.mockResolvedValue({ count: 0 });
@@ -35,6 +39,16 @@ beforeEach(() => {
       document: { id: "doc-1", name: "Atlas research notes.md" },
     },
   ]);
+});
+
+describe("authentication", () => {
+  it("rejects unauthenticated requests on every method", async () => {
+    auth.getCurrentUser.mockResolvedValue(null);
+    expect((await GET(new NextRequest("http://localhost/api/chat"))).status).toBe(401);
+    expect((await DELETE(new NextRequest("http://localhost/api/chat", { method: "DELETE" }))).status).toBe(401);
+    expect((await POST(ask("What is Atlas?"))).status).toBe(401);
+    expect(prisma.chunk.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/chat", () => {
@@ -87,25 +101,29 @@ describe("chat history", () => {
       { role: "user", content: "What is Atlas?", citations: "[]" },
     ]);
 
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost/api/chat"));
     const data = await response.json();
 
     expect(data.messages).toHaveLength(2);
     expect(data.messages[0].role).toBe("user");
     expect(data.messages[1].citations).toEqual([{ id: "chunk-1" }]);
-    expect(prisma.message.findMany).toHaveBeenCalledWith({ orderBy: { createdAt: "desc" }, take: 100 });
+    expect(prisma.message.findMany).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
   });
 
   it("tolerates corrupted citation data", async () => {
     prisma.message.findMany.mockResolvedValue([
       { role: "assistant", content: "Answer", citations: "broken json" },
     ]);
-    expect((await (await GET()).json()).messages[0].citations).toEqual([]);
+    expect((await (await GET(new NextRequest("http://localhost/api/chat"))).json()).messages[0].citations).toEqual([]);
   });
 
   it("clears the conversation", async () => {
-    const response = await DELETE();
+    const response = await DELETE(new NextRequest("http://localhost/api/chat", { method: "DELETE" }));
     expect(response.status).toBe(204);
-    expect(prisma.message.deleteMany).toHaveBeenCalledOnce();
+    expect(prisma.message.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
   });
 });

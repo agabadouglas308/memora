@@ -6,17 +6,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import { chunkText } from "@/lib/rag";
 import { embedTexts, embeddingModelName } from "@/lib/provider";
 import { DEMO_DOCUMENT } from "@/lib/demo-document";
 
 export const runtime = "nodejs";
 const execFileAsync = promisify(execFile);
-const SEED_KEY = "demoSeeded";
+function unauthorized() {
+  return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
+}
 
-async function claimSeed() {
+async function claimSeed(key: string) {
   try {
-    await prisma.appMeta.create({ data: { key: SEED_KEY, value: "true" } });
+    await prisma.appMeta.create({ data: { key, value: "true" } });
     return true;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") return false;
@@ -39,7 +42,7 @@ async function extractPdf(buffer: Buffer) {
   }
 }
 
-async function createDocumentWithChunks(data: { name: string; type: string; size: number; text: string }) {
+async function createDocumentWithChunks(data: { name: string; type: string; size: number; text: string; userId: string }) {
   const id = randomUUID();
   const chunks = chunkText(data.text);
   const vectors = chunks.length ? await embedTexts(chunks) : [];
@@ -60,23 +63,30 @@ async function createDocumentWithChunks(data: { name: string; type: string; size
   return { id, chunkCount: chunks.length };
 }
 
-export async function GET() {
-  const claimed = await claimSeed();
-  const count = await prisma.document.count();
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser(request);
+  if (!user) return unauthorized();
+
+  const claimed = await claimSeed(`demoSeeded:${user.id}`);
+  const count = await prisma.document.count({ where: { userId: user.id } });
   if (count === 0 && claimed) {
     await createDocumentWithChunks({
       name: "Atlas research notes.md",
       type: "text/markdown",
       size: DEMO_DOCUMENT.length,
       text: DEMO_DOCUMENT,
+      userId: user.id,
     });
   }
 
   const documents = await prisma.document.findMany({
+    where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { chunks: true } } },
   });
-  const activeChunkCount = await prisma.chunk.count({ where: { model: embeddingModelName } });
+  const activeChunkCount = await prisma.chunk.count({
+    where: { model: embeddingModelName, document: { userId: user.id } },
+  });
   const warning = documents.length > 0 && activeChunkCount === 0
     ? `No chunks match the active embedding model (${embeddingModelName}). Re-upload your documents.`
     : null;
@@ -85,6 +95,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUser(request);
+  if (!user) return unauthorized();
+
   let form: FormData;
   try {
     form = await request.formData();
@@ -121,6 +134,7 @@ export async function POST(request: NextRequest) {
     type: file.type || "text/plain",
     size: file.size,
     text,
+    userId: user.id,
   });
 
   return NextResponse.json({
