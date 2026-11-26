@@ -14,7 +14,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Memora — AI Second Brain",
+  title: "Memora: AI Second Brain",
   description: "Upload knowledge. Ask questions. Trace every answer.",
 };
 

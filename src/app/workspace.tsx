@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp, BookOpen, Check, ChevronRight, FileText, Link2, Menu,
-  MoreHorizontal, Plus, Search, Sparkles, Trash2, X,
+  Layers, MoreHorizontal, Plus, Search, Trash2, X,
 } from "lucide-react";
 
 type DocumentItem = {
@@ -131,7 +131,7 @@ export default function Workspace() {
           <div className="flex h-[68px] items-center justify-between px-5">
             <div className="flex items-center gap-2.5">
               <div className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#1d201b] text-[#dfff6d]">
-                <Sparkles size={16} strokeWidth={2.2} />
+                <Layers size={16} strokeWidth={2.2} />
               </div>
               <span className="text-[17px] font-semibold tracking-[-0.02em]">Memora</span>
             </div>
@@ -188,7 +188,7 @@ export default function Workspace() {
               <div className="flex-1 overflow-y-auto">
                 {messages.length === 0 ? (
                   <div className="mx-auto flex h-full max-w-[760px] flex-col justify-center px-5 pb-16">
-                    <div className="mb-7 grid h-11 w-11 place-items-center rounded-[12px] border border-[#e1e2dc] bg-[#f7f7f4]"><Sparkles size={19} strokeWidth={1.8} /></div>
+                    <div className="mb-7 grid h-11 w-11 place-items-center rounded-[12px] border border-[#e1e2dc] bg-[#f7f7f4]"><Layers size={19} strokeWidth={1.8} /></div>
                     <h1 className="max-w-[620px] text-[32px] font-semibold leading-[1.12] tracking-[-0.04em] sm:text-[42px]">What do you want to know?</h1>
                     <p className="mt-3 max-w-[540px] text-[14px] leading-6 text-[#858980]">Ask a question across your documents. Answers include exact source passages you can verify.</p>
                     <div className="mt-8 grid gap-2 sm:grid-cols-3">
@@ -205,7 +205,7 @@ export default function Workspace() {
                       <div key={index} className={`mb-7 flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                         {message.role === "assistant" ? (
                           <div className="max-w-[680px]">
-                            <div className="mb-2.5 flex items-center gap-2"><div className="grid h-6 w-6 place-items-center rounded-[7px] bg-[#1d201b] text-[#dfff6d]"><Sparkles size={12} /></div><span className="text-[11px] font-bold">Memora</span></div>
+                            <div className="mb-2.5 flex items-center gap-2"><div className="grid h-6 w-6 place-items-center rounded-[7px] bg-[#1d201b] text-[#dfff6d]"><Layers size={12} /></div><span className="text-[11px] font-bold">Memora</span></div>
                             <div className="whitespace-pre-wrap text-[14px] leading-7 text-[#3d4038]">{message.content}</div>
                           </div>
                         ) : (

@@ -5,25 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f4">
   <meta name="description" content="Memora turns your documents into a searchable, cited second brain. Try the interactive browser demo.">
-  <title>Memora — your second brain</title>
+  <title>Memora: your second brain</title>
   <style>
     :root{color-scheme:light;--ink:#171816;--muted:#858980;--line:#e4e5df;--paper:#fff;--wash:#f7f7f4;--lime:#dfff6d}
     *{box-sizing:border-box}body{margin:0;background:var(--wash);color:var(--ink);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,textarea{font:inherit}button{color:inherit;cursor:pointer}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #9db84c;outline-offset:2px}
     .topbar{height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,calc((100vw - 1180px)/2));border-bottom:1px solid #e8e9e3;background:#fbfbf8}.brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;letter-spacing:-.03em}.mark{width:32px;height:32px;border-radius:9px;background:#1d201b;color:var(--lime);display:grid;place-items:center}.mark svg{width:17px}.nav{display:flex;align-items:center;gap:22px}.nav a{color:#777a72;text-decoration:none;font-size:12px}.nav a:hover{color:var(--ink)}.nav .github{color:var(--ink);font-weight:650}
     .wrap{max-width:1180px;margin:0 auto;padding:56px 24px 70px}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-bottom:28px}.eyebrow{font-size:10px;font-weight:750;letter-spacing:.18em;text-transform:uppercase;color:#7e8277}.intro h1{font-size:clamp(34px,5vw,53px);line-height:1.04;letter-spacing:-.055em;margin:12px 0 10px;font-weight:650}.intro p{max-width:540px;margin:0;color:#7f8379;font-size:14px;line-height:1.7}.status{border:1px solid var(--line);border-radius:100px;padding:8px 12px;color:#777a72;font-size:10px;white-space:nowrap;background:#fff}.status:before{content:"";display:inline-block;width:7px;height:7px;background:#99bd4c;border-radius:50%;margin-right:7px}
     .app{height:min(640px,calc(100vh - 250px));min-height:540px;background:#fff;border:1px solid #dedfd8;border-radius:16px;box-shadow:0 20px 60px #22220c0b;display:grid;grid-template-columns:244px minmax(0,1fr) 270px;overflow:hidden}.sidebar{background:#f0f0ea;border-right:1px solid #e3e4dd;display:flex;flex-direction:column;min-width:0}.side-head{height:61px;display:flex;align-items:center;padding:0 16px;font-weight:650;font-size:12px}.upload{margin:0 12px 20px;padding:10px 12px;border:1px solid #d5d7cf;background:#fff;border-radius:9px;text-align:left;font-size:11px;font-weight:650}.upload:hover{border-color:#b4b8aa}.section{padding:0 15px 7px;font-size:9px;font-weight:750;text-transform:uppercase;letter-spacing:.14em;color:#92958b}.doc-list{padding:0 8px;overflow:auto}.doc{display:flex;gap:8px;align-items:center;padding:9px 8px;border-radius:8px}.doc:hover{background:#ffffffa8}.doc-icon{width:29px;height:29px;border:1px solid #dedfd8;background:#fff;border-radius:7px;display:grid;place-items:center;color:#797d72;flex:none}.doc-icon svg{width:14px}.doc-meta{min-width:0;flex:1}.doc-name{font-size:10px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.doc-sub{font-size:9px;color:#969990}.remove{border:0;background:none;color:#979a90;opacity:0;padding:3px}.doc:hover .remove{opacity:1}.profile{margin-top:auto;border-top:1px solid #dedfd8;padding:12px;display:flex;align-items:center;gap:8px;font-size:10px;font-weight:650}.avatar{width:28px;height:28px;background:var(--lime);border-radius:50%;display:grid;place-items:center;font-size:9px}
-    .chat{display:flex;flex-direction:column;min-width:0}.chat-head{height:61px;border-bottom:1px solid #eee;padding:0 19px;display:flex;align-items:center;justify-content:space-between}.chat-title{font-size:11px;font-weight:700}.chat-sub{font-size:9px;color:#92958b}.new-chat{font-size:10px;font-weight:600;background:white;border:1px solid var(--line);border-radius:7px;padding:7px 10px}.messages{flex:1;overflow:auto;padding:20px max(18px,calc((100% - 620px)/2));}.welcome{height:100%;display:flex;flex-direction:column;justify-content:center;max-width:650px;margin:auto;padding-bottom:24px}.spark{width:40px;height:40px;border:1px solid var(--line);border-radius:11px;display:grid;place-items:center;margin-bottom:21px}.spark svg{width:19px}.welcome h2{font-size:34px;line-height:1.1;letter-spacing:-.05em;margin:0 0 10px;font-weight:650}.welcome>p{font-size:12px;color:#858980;line-height:1.7;margin:0;max-width:480px}.suggestions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:24px}.suggestion{background:white;border:1px solid var(--line);border-radius:10px;padding:11px;text-align:left;min-height:76px;font-size:10px;font-weight:650;line-height:1.45;display:flex;flex-direction:column;justify-content:space-between}.suggestion:hover{border-color:#c3c6bc;transform:translateY(-1px)}.suggestion span:last-child{text-align:right;color:#9da096;font-size:13px}.bubble{max-width:85%;margin:0 0 20px auto;background:#eff1e9;padding:10px 13px;border-radius:12px 12px 4px 12px;font-size:11px;line-height:1.7;white-space:pre-wrap}.answer{font-size:12px;line-height:1.8;color:#44473f;margin-bottom:20px}.answer-label{font-size:10px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px}.mini-mark{width:20px;height:20px;border-radius:6px;background:#1d201b;color:var(--lime);display:grid;place-items:center;font-size:11px}
+    .chat{display:flex;flex-direction:column;min-width:0}.chat-head{height:61px;border-bottom:1px solid #eee;padding:0 19px;display:flex;align-items:center;justify-content:space-between}.chat-title{font-size:11px;font-weight:700}.chat-sub{font-size:9px;color:#92958b}.new-chat{font-size:10px;font-weight:600;background:white;border:1px solid var(--line);border-radius:7px;padding:7px 10px}.messages{flex:1;overflow:auto;padding:20px max(18px,calc((100% - 620px)/2));}.welcome{height:100%;display:flex;flex-direction:column;justify-content:center;max-width:650px;margin:auto;padding-bottom:24px}.spark{width:40px;height:40px;border:1px solid var(--line);border-radius:11px;display:grid;place-items:center;margin-bottom:21px}.spark svg{width:19px}.welcome h2{font-size:34px;line-height:1.1;letter-spacing:-.05em;margin:0 0 10px;font-weight:650}.welcome>p{font-size:12px;color:#858980;line-height:1.7;margin:0;max-width:480px}.suggestions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:24px}.suggestion{background:white;border:1px solid var(--line);border-radius:10px;padding:11px;text-align:left;min-height:76px;font-size:10px;font-weight:650;line-height:1.45;display:flex;flex-direction:column;justify-content:space-between}.suggestion:hover{border-color:#c3c6bc;transform:translateY(-1px)}.bubble{max-width:85%;margin:0 0 20px auto;background:#eff1e9;padding:10px 13px;border-radius:12px 12px 4px 12px;font-size:11px;line-height:1.7;white-space:pre-wrap}.answer{font-size:12px;line-height:1.8;color:#44473f;margin-bottom:20px}.answer-label{font-size:10px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px}.mini-mark{width:20px;height:20px;border-radius:6px;background:#1d201b;color:var(--lime);display:grid;place-items:center;font-size:11px}
     .composer-wrap{padding:0 16px 15px}.composer{border:1px solid #dfe1da;border-radius:12px;padding:7px;display:flex;align-items:flex-end;gap:6px;box-shadow:0 5px 20px #23261f0b}.composer:focus-within{border-color:#bfc2b7}.composer textarea{resize:none;max-height:80px;min-height:34px;flex:1;border:0;outline:0;padding:8px 4px;font-size:11px;color:var(--ink)}.composer textarea::placeholder{color:#a5a89e}.icon-button,.send{border:0;border-radius:8px;width:33px;height:33px;display:grid;place-items:center;flex:none}.icon-button{background:transparent;color:#858980}.icon-button:hover{background:#f2f3ee}.send{background:#1d201b;color:var(--lime)}.send:disabled{background:#e7e8e2;color:#aaa}.send svg{width:15px}.note{text-align:center;font-size:8px;color:#aaaDA3;margin:7px 0 0}
     .sources{border-left:1px solid #ebebe6;background:#fbfbf8;min-width:0}.sources-head{height:61px;border-bottom:1px solid #ebebe6;display:flex;align-items:center;padding:0 17px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:750;color:#858980}.source-list{padding:10px;overflow:auto;max-height:calc(100% - 61px)}.source-empty{height:calc(100% - 61px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:#969990;font-size:10px;line-height:1.6}.source-empty strong{color:var(--ink);font-size:11px;margin:9px 0 3px}.source-card{background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px;margin-bottom:8px}.source-title{font-size:9px;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:8px}.number{width:17px;height:17px;display:grid;place-items:center;background:#eff1e9;border-radius:50%;font-size:8px}.source-copy{font-size:9px;line-height:1.7;color:#686b62}.source-foot{border-top:1px solid #f0f0ec;margin-top:9px;padding-top:7px;color:#969990;font-size:8px}
     .foot{max-width:1180px;margin:-48px auto 0;padding:0 24px 20px;color:#a0a298;font-size:9px;display:flex;justify-content:space-between}.foot a{color:#777a72}.mobile-menu{display:none}
     @media(max-width:900px){.app{grid-template-columns:210px minmax(0,1fr)}.sources{display:none}.intro{align-items:flex-start;flex-direction:column}.status{position:absolute;right:24px;top:118px}}
-    @media(max-width:620px){.topbar{height:58px;padding:0 16px}.nav{gap:12px}.nav a{font-size:10px}.nav a:first-child{display:none}.wrap{padding:34px 12px 60px}.intro{margin:0 7px 20px}.intro h1{font-size:38px;max-width:330px}.intro p{font-size:12px;max-width:330px}.status{position:static}.app{height:calc(100dvh - 250px);min-height:500px;grid-template-columns:minmax(0,1fr);border-radius:12px}.sidebar{display:none}.chat-head{padding:0 13px}.messages{padding:18px 14px}.welcome h2{font-size:30px}.suggestions{grid-template-columns:1fr}.suggestion{min-height:46px;flex-direction:row;align-items:center}.suggestion span:last-child{display:none}.composer-wrap{padding:0 10px 12px}.foot{margin:0;padding:0 17px 18px;font-size:8px}}
+    @media(max-width:620px){.topbar{height:58px;padding:0 16px}.nav{gap:12px}.nav a{font-size:10px}.nav a:first-child{display:none}.wrap{padding:34px 12px 60px}.intro{margin:0 7px 20px}.intro h1{font-size:38px;max-width:330px}.intro p{font-size:12px;max-width:330px}.status{position:static}.app{height:calc(100dvh - 250px);min-height:500px;grid-template-columns:minmax(0,1fr);border-radius:12px}.sidebar{display:none}.chat-head{padding:0 13px}.messages{padding:18px 14px}.welcome h2{font-size:30px}.suggestions{grid-template-columns:1fr}.suggestion{min-height:46px;flex-direction:row;align-items:center}.composer-wrap{padding:0 10px 12px}.foot{margin:0;padding:0 17px 18px;font-size:8px}}
   </style>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Memora home"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 13.8 9.2 20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/></svg></span>Memora</a>
-    <nav class="nav"><a href="#demo">Interactive demo</a><a href="https://github.com/agabadouglas308/second-brain" class="github">View on GitHub ↗</a></nav>
+    <a class="brand" href="#" aria-label="Memora home"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12.83 2.18 9 5a2 2 0 0 1 0 3.64l-9 5a2 2 0 0 1-1.66 0l-9-5a2 2 0 0 1 0-3.64l9-5a2 2 0 0 1 1.66 0Z"/><path d="m5 12.55 7 3.89 7-3.89"/><path d="m5 16.55 7 3.89 7-3.89"/></svg></span>Memora</a>
+    <nav class="nav"><a href="#demo">Interactive demo</a><a href="https://github.com/agabadouglas308/second-brain" class="github">View on GitHub</a></nav>
   </header>
   <main class="wrap" id="demo">
     <section class="intro">
@@ -33,7 +33,7 @@
     <section class="app" aria-label="Memora interactive demo">
       <aside class="sidebar">
         <div class="side-head">Your knowledge</div>
-        <button class="upload" id="upload-button">＋ &nbsp;Add text or Markdown</button>
+        <button class="upload" id="upload-button">Add text or Markdown</button>
         <input id="file-input" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown" hidden>
         <div class="section">Library <span id="doc-count">1</span></div>
         <div class="doc-list" id="doc-list"></div>
@@ -43,29 +43,29 @@
         <header class="chat-head"><div><div class="chat-title">Knowledge chat</div><div class="chat-sub">Ask your documents, not the internet</div></div><button class="new-chat" id="new-chat">New chat</button></header>
         <div class="messages" id="messages">
           <div class="welcome" id="welcome">
-            <div class="spark"><svg viewBox="0 0 24 24" width="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 13.8 9.2 20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z"/></svg></div>
+            <div class="spark"><svg viewBox="0 0 24 24" width="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12.83 2.18 9 5a2 2 0 0 1 0 3.64l-9 5a2 2 0 0 1-1.66 0l-9-5a2 2 0 0 1 0-3.64l9-5a2 2 0 0 1 1.66 0Z"/><path d="m5 12.55 7 3.89 7-3.89"/><path d="m5 16.55 7 3.89 7-3.89"/></svg></div>
             <h2>What do you want to know?</h2>
             <p>Ask a question across your documents. Answers include exact source passages you can verify.</p>
             <div class="suggestions">
-              <button class="suggestion" data-question="What is the Atlas platform?"><span>What is the Atlas platform?</span><span>↗</span></button>
-              <button class="suggestion" data-question="Why is chunk overlap important?"><span>Why is chunk overlap important?</span><span>↗</span></button>
-              <button class="suggestion" data-question="How should retrieval be evaluated?"><span>How should retrieval be evaluated?</span><span>↗</span></button>
+              <button class="suggestion" data-question="What is the Atlas platform?"><span>What is the Atlas platform?</span></button>
+              <button class="suggestion" data-question="Why is chunk overlap important?"><span>Why is chunk overlap important?</span></button>
+              <button class="suggestion" data-question="How should retrieval be evaluated?"><span>How should retrieval be evaluated?</span></button>
             </div>
           </div>
         </div>
         <div class="composer-wrap">
           <form class="composer" id="ask-form">
-            <button type="button" class="icon-button" id="upload-inline" aria-label="Upload text or Markdown">＋</button>
+            <button type="button" class="icon-button" id="upload-inline" aria-label="Upload text or Markdown">+</button>
             <textarea id="question" rows="1" placeholder="Ask across your knowledge..." aria-label="Your question"></textarea>
             <button class="send" type="submit" aria-label="Send question"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
           </form>
           <p class="note">Static demo: files stay in this browser session; no server or AI provider is connected.</p>
         </div>
       </section>
-      <aside class="sources"><div class="sources-head">⌁ &nbsp;Sources</div><div id="source-list" class="source-empty"><div>▤</div><strong>Source passages</strong><span>Retrieved citations appear here after a question.</span></div></aside>
+      <aside class="sources"><div class="sources-head">Sources</div><div id="source-list" class="source-empty"><strong>Source passages</strong><span>Retrieved citations appear here after a question.</span></div></aside>
     </section>
   </main>
-  <footer class="foot"><span>Memora · Traceable answers from your knowledge</span><span>Static demo · <a href="https://github.com/agabadouglas308/second-brain">Open-source project</a></span></footer>
+  <footer class="foot"><span>Memora: traceable answers from your knowledge</span><span>Static demo: <a href="https://github.com/agabadouglas308/second-brain">Open-source project</a></span></footer>
   <script>
     const starterText = `# Atlas Research Notes
 
@@ -90,9 +90,9 @@ Every document and query result should be scoped to the owning workspace. Produc
     function renderDocs() {
       const list = document.getElementById("doc-list"); list.replaceChildren();
       documents.forEach((doc) => {
-        const row = el("div", "doc"), icon = el("span", "doc-icon", "▤"), meta = el("div", "doc-meta");
+        const row = el("div", "doc"), icon = el("span", "doc-icon", doc.name.charAt(0).toUpperCase()), meta = el("div", "doc-meta");
         meta.append(el("div", "doc-name", doc.name), el("div", "doc-sub", `${Math.max(1, Math.ceil(doc.text.length / 900))} chunks`));
-        const remove = el("button", "remove", "×"); remove.type = "button"; remove.setAttribute("aria-label", `Remove ${doc.name}`);
+        const remove = el("button", "remove", "Remove"); remove.type = "button"; remove.setAttribute("aria-label", `Remove ${doc.name}`);
         remove.addEventListener("click", () => { const index = documents.findIndex((item) => item.id === doc.id); if (index >= 0) documents.splice(index, 1); renderDocs(); });
         row.append(icon, meta, remove); list.append(row);
       });
@@ -107,10 +107,10 @@ Every document and query result should be scoped to the owning workspace. Produc
     }
     function showSources(passages) {
       const list = document.getElementById("source-list"); list.className = "source-list"; list.replaceChildren();
-      if (!passages.length) { list.className = "source-empty"; list.append(el("div", "", "▤"), el("strong", "", "No matching sources"), el("span", "", "Try another question or add a related text document.")); return; }
+      if (!passages.length) { list.className = "source-empty"; list.append(el("strong", "", "No matching sources"), el("span", "", "Try another question or add a related text document.")); return; }
       passages.forEach((source, i) => {
         const card = el("article", "source-card"), title = el("div", "source-title"), number = el("span", "number", String(i+1));
-        title.append(number, el("span", "", source.name)); card.append(title, el("div", "source-copy", source.text), el("div", "source-foot", `Matched passage · ${Math.round(source.score*100)}% term overlap`)); list.append(card);
+        title.append(number, el("span", "", source.name)); card.append(title, el("div", "source-copy", source.text), el("div", "source-foot", `Matched passage, ${Math.round(source.score*100)}% term overlap`)); list.append(card);
       });
     }
     function ask(question) {
@@ -119,8 +119,8 @@ Every document and query result should be scoped to the owning workspace. Produc
       const messages = document.getElementById("messages");
       messages.append(el("div", "bubble", query));
       const sources = getPassages(query);
-      const answer = el("div", "answer"), label = el("div", "answer-label"), marker = el("span", "mini-mark", "✦");
-      label.append(marker, el("span", "", "Memora · Extractive demo"));
+      const answer = el("div", "answer"), label = el("div", "answer-label"), marker = el("span", "mini-mark", "M");
+      label.append(marker, el("span", "", "Memora extractive demo"));
       answer.append(label);
       const response = sources.length ? sources.slice(0,2).map((source) => source.text.replace(/^#+\s*/gm, "").replace(/\s+/g," ")).join(" ") : "I could not find a matching passage in the current documents. Try rephrasing your question or add a related text or Markdown file.";
       answer.append(el("div", "", response));

@@ -1,13 +1,13 @@
-# Memora — AI Second Brain
+# Memora: AI Second Brain
 
 Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect the source passages behind each answer.
 
 **Live static demo:** https://agabadouglas308.github.io/second-brain/
 
-## What’s here
+## What is here
 
-- **Next.js app** — document ingestion, overlapping text chunks, persisted documents and chunks in SQLite, ranked retrieval, streaming answers, and citations.
-- **GitHub Pages demo** — an interactive browser-only preview in [`docs/`](./docs/). It runs without a server and supports text and Markdown uploads. Browser demo data stays in memory and is cleared on refresh.
+- **Next.js app**: document ingestion, overlapping text chunks, persisted documents and chunks in SQLite, ranked retrieval, streaming answers, and citations.
+- **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It runs without a server and supports text and Markdown uploads. Browser demo data stays in memory and is cleared on refresh.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
 
