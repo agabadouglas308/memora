@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { cosine, parseEmbedding } from "@/lib/rag";
-import { embedTexts, embeddingModelName, streamAnswer } from "@/lib/provider";
+import { cosine } from "@/lib/rag";
+import { embedTexts, embeddingModelName, streamAnswer, usesOllama } from "@/lib/provider";
+import { candidateIds, embeddingFor } from "@/lib/search-index";
 
 export const runtime = "nodejs";
 
@@ -42,14 +43,16 @@ export async function POST(request: NextRequest) {
     include: { document: { select: { id: true, name: true } } },
   });
 
+  const candidates = candidateIds(question, chunks);
   const ranked = chunks
+    .filter((chunk) => usesOllama() || candidates.has(chunk.id))
     .map((chunk) => ({
       id: chunk.id,
       text: chunk.text,
       position: chunk.position,
       documentId: chunk.document.id,
       documentName: chunk.document.name,
-      score: cosine(queryEmbedding, parseEmbedding(chunk.embedding)),
+      score: cosine(queryEmbedding, embeddingFor(chunk.id, chunk.embedding)),
     }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)

@@ -85,13 +85,54 @@ The retrieval layer should be evaluated with a labeled set of questions and sour
 ## Security
 Every document and query result should be scoped to the owning workspace. Production deployments should add authentication, signed upload URLs, row-level database policies, and prompt-injection safeguards.`;
     const documents = [{ id: "atlas", name: "Atlas research notes.md", text: starterText }];
+    const STOP_WORDS = new Set(["a","an","and","are","as","at","be","but","by","for","from","has","he","in","is","it","its","of","on","or","that","the","to","was","were","will","with","what","when","where","who","why"]);
     const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
-    const words = (value) => (value.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) || []).filter((word) => !new Set(["the","and","for","are","that","with","what","how","why","from","this","into","its","has"]).has(word));
+    function chunkText(text, size = 900, overlap = 180) {
+      const clean = text.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").trim();
+      if (!clean) return [];
+      const chunks = [];
+      let start = 0;
+      while (start < clean.length) {
+        let end = Math.min(start + size, clean.length);
+        if (end < clean.length) {
+          const boundary = clean.lastIndexOf("\n", end);
+          if (boundary > start + size * 0.55) end = boundary;
+        }
+        const chunk = clean.slice(start, end).trim();
+        if (chunk) chunks.push(chunk);
+        const next = end - overlap;
+        start = next > start ? next : end;
+      }
+      return chunks;
+    }
+    function hashString(value) {
+      let hash = 2166136261;
+      for (let i = 0; i < value.length; i++) { hash ^= value.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+      return hash >>> 0;
+    }
+    function embedText(text, dimensions = 384) {
+      const vector = new Array(dimensions).fill(0);
+      const tokens = text.toLowerCase().match(/[a-z0-9][a-z0-9'-]{1,}/g) || [];
+      for (const token of tokens) {
+        if (STOP_WORDS.has(token) || token.length < 3) continue;
+        const index = hashString(token) % dimensions;
+        const sign = (hashString(`${token}:sign`) & 1) === 0 ? 1 : -1;
+        vector[index] += sign;
+      }
+      const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+      return magnitude ? vector.map((value) => value / magnitude) : vector;
+    }
+    function cosine(a, b) {
+      let dot = 0, magA = 0, magB = 0;
+      for (let i = 0; i < Math.min(a.length, b.length); i++) { dot += a[i] * b[i]; magA += a[i] * a[i]; magB += b[i] * b[i]; }
+      const denominator = Math.sqrt(magA) * Math.sqrt(magB);
+      return denominator ? dot / denominator : 0;
+    }
     function renderDocs() {
       const list = document.getElementById("doc-list"); list.replaceChildren();
       documents.forEach((doc) => {
         const row = el("div", "doc"), icon = el("span", "doc-icon", doc.name.charAt(0).toUpperCase()), meta = el("div", "doc-meta");
-        meta.append(el("div", "doc-name", doc.name), el("div", "doc-sub", `${Math.max(1, Math.ceil(doc.text.length / 900))} chunks`));
+        meta.append(el("div", "doc-name", doc.name), el("div", "doc-sub", `${chunkText(doc.text).length} chunks`));
         const remove = el("button", "remove", "Remove"); remove.type = "button"; remove.setAttribute("aria-label", `Remove ${doc.name}`);
         remove.addEventListener("click", () => { const index = documents.findIndex((item) => item.id === doc.id); if (index >= 0) documents.splice(index, 1); renderDocs(); });
         row.append(icon, meta, remove); list.append(row);
@@ -99,18 +140,22 @@ Every document and query result should be scoped to the owning workspace. Produc
       document.getElementById("doc-count").textContent = String(documents.length);
     }
     function getPassages(query) {
-      const terms = new Set(words(query));
-      return documents.flatMap((doc) => doc.text.split(/\n\s*\n/).map((text, index) => {
-        const matches = words(text).filter((word) => terms.has(word)).length;
-        return { id: `${doc.id}-${index}`, name: doc.name, text: text.trim(), score: matches / Math.max(terms.size, 1) };
-      })).filter((passage) => passage.score > 0).sort((a,b) => b.score-a.score).slice(0,3);
+      const queryVector = embedText(query);
+      return documents.flatMap((doc) => chunkText(doc.text).map((text, position) => ({
+        id: `${doc.id}-${position}`, name: doc.name, position, text, score: cosine(queryVector, embedText(text)),
+      }))).filter((passage) => passage.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+    }
+    function extractAnswer(query, passages) {
+      const terms = new Set((query.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) || []).filter((term) => !STOP_WORDS.has(term)));
+      const sentences = passages.flatMap((passage) => passage.text.replace(/\n+/g, " ").split(/(?<=[.!?])\s+/).map((sentence) => sentence.replace(/^#+\s*/, "").trim()).filter((sentence) => sentence.length > 24).map((sentence) => ({ sentence, score: (sentence.toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g) || []).filter((term) => terms.has(term)).length }))).filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+      return sentences.length ? sentences.map((item) => item.sentence.replace(/\s+/g, " ")).join(" ") : "I could not find relevant information in the uploaded documents. Try rephrasing your question or add a related document.";
     }
     function showSources(passages) {
       const list = document.getElementById("source-list"); list.className = "source-list"; list.replaceChildren();
       if (!passages.length) { list.className = "source-empty"; list.append(el("strong", "", "No matching sources"), el("span", "", "Try another question or add a related text document.")); return; }
       passages.forEach((source, i) => {
         const card = el("article", "source-card"), title = el("div", "source-title"), number = el("span", "number", String(i+1));
-        title.append(number, el("span", "", source.name)); card.append(title, el("div", "source-copy", source.text), el("div", "source-foot", `Matched passage, ${Math.round(source.score*100)}% term overlap`)); list.append(card);
+        title.append(number, el("span", "", source.name)); card.append(title, el("div", "source-copy", source.text), el("div", "source-foot", `Chunk ${source.position + 1}, ${Math.round(source.score*100)}% similarity`)); list.append(card);
       });
     }
     function ask(question) {
@@ -122,8 +167,7 @@ Every document and query result should be scoped to the owning workspace. Produc
       const answer = el("div", "answer"), label = el("div", "answer-label"), marker = el("span", "mini-mark", "M");
       label.append(marker, el("span", "", "Memora extractive demo"));
       answer.append(label);
-      const response = sources.length ? sources.slice(0,2).map((source) => source.text.replace(/^#+\s*/gm, "").replace(/\s+/g," ")).join(" ") : "I could not find a matching passage in the current documents. Try rephrasing your question or add a related text or Markdown file.";
-      answer.append(el("div", "", response));
+      answer.append(el("div", "", extractAnswer(query, sources)));
       messages.append(answer); messages.scrollTop = messages.scrollHeight;
       showSources(sources);
     }

@@ -92,7 +92,7 @@ export function answerFromContext(question: string, contexts: Array<{ text: stri
       context.text
         .replace(/\n+/g, " ")
         .split(/(?<=[.!?])\s+/)
-        .map((sentence) => sentence.trim())
+        .map((sentence) => sentence.replace(/^#+\s*/, "").trim())
         .filter((sentence) => sentence.length > 24)
         .map((sentence) => ({
           sentence,
