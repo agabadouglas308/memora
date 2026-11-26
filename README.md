@@ -1,5 +1,7 @@
 # Memora: AI Second Brain
 
+[![CI](https://github.com/agabadouglas308/memora/actions/workflows/ci.yml/badge.svg)](https://github.com/agabadouglas308/memora/actions/workflows/ci.yml)
+
 Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect the source passages behind each answer.
 
 **Live static demo:** https://agabadouglas308.github.io/second-brain/
@@ -25,6 +27,10 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The document API seeds a sample Atlas research note into an empty database.
+
+## Run with Docker
+
+`docker compose up --build` starts the app on port 3000 with `pdftotext` included and the SQLite schema created on first boot. The database lives in a named volume so it survives container restarts.
 
 ## Optional: use a real model
 
