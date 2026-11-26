@@ -27,6 +27,7 @@ type Citation = {
 type Message = {
   role: "user" | "assistant";
   content: string;
+  citations?: Citation[];
 };
 
 const suggestions = [
@@ -52,7 +53,16 @@ export default function Workspace() {
     setDocuments(data.documents ?? []);
   }
 
-  useEffect(() => { loadDocuments(); }, []);
+  async function loadHistory() {
+    const response = await fetch("/api/chat");
+    const data = await response.json();
+    const restored = (data.messages ?? []) as Message[];
+    setMessages(restored);
+    const lastAssistant = [...restored].reverse().find((message) => message.role === "assistant");
+    if (lastAssistant?.citations) setCitations(lastAssistant.citations);
+  }
+
+  useEffect(() => { loadDocuments(); loadHistory(); }, []);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   async function upload(file: File) {
@@ -179,7 +189,7 @@ export default function Workspace() {
             </div>
             <div className="flex items-center gap-2">
               <button className="hidden items-center gap-2 rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] sm:flex"><Search size={13} />Search</button>
-              <button onClick={() => { setMessages([]); setCitations([]); }} className="rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] hover:bg-[#f7f7f4]">New chat</button>
+              <button onClick={async () => { await fetch("/api/chat", { method: "DELETE" }); setMessages([]); setCitations([]); }} className="rounded-[8px] border border-[#e1e2dc] px-3 py-2 text-[11px] font-semibold text-[#777a72] hover:bg-[#f7f7f4]">New chat</button>
             </div>
           </header>
 

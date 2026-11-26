@@ -4,12 +4,12 @@ import { embedText } from "@/lib/rag";
 
 const prisma = vi.hoisted(() => ({
   chunk: { findMany: vi.fn() },
-  message: { create: vi.fn() },
+  message: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma }));
 
-import { POST } from "./route";
+import { DELETE, GET, POST } from "./route";
 
 function ask(question: string) {
   return new NextRequest("http://localhost/api/chat", {
@@ -21,6 +21,8 @@ function ask(question: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   prisma.message.create.mockResolvedValue({});
+  prisma.message.findMany.mockResolvedValue([]);
+  prisma.message.deleteMany.mockResolvedValue({ count: 0 });
   prisma.chunk.findMany.mockResolvedValue([
     {
       id: "chunk-1",
@@ -66,5 +68,33 @@ describe("POST /api/chat", () => {
     const response = await POST(ask("What is Atlas?"));
     expect(response.status).toBe(200);
     expect((await response.text())).toContain("could not find relevant information");
+  });
+});
+
+describe("chat history", () => {
+  it("returns saved messages with parsed citations", async () => {
+    prisma.message.findMany.mockResolvedValue([
+      { role: "user", content: "What is Atlas?", citations: "[]" },
+      { role: "assistant", content: "Atlas is a platform.", citations: '[{"id":"chunk-1"}]' },
+    ]);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(data.messages).toHaveLength(2);
+    expect(data.messages[1].citations).toEqual([{ id: "chunk-1" }]);
+  });
+
+  it("tolerates corrupted citation data", async () => {
+    prisma.message.findMany.mockResolvedValue([
+      { role: "assistant", content: "Answer", citations: "broken json" },
+    ]);
+    expect((await (await GET()).json()).messages[0].citations).toEqual([]);
+  });
+
+  it("clears the conversation", async () => {
+    const response = await DELETE();
+    expect(response.status).toBe(204);
+    expect(prisma.message.deleteMany).toHaveBeenCalledOnce();
   });
 });

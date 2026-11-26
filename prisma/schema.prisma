@@ -24,6 +24,7 @@ model Chunk {
   text       String
   position   Int
   embedding  String
+  model      String   @default("hash-384")
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])

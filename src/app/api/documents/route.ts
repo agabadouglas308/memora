@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
-import { chunkText, embedText } from "@/lib/rag";
+import { chunkText } from "@/lib/rag";
+import { embedTexts, embeddingModelName } from "@/lib/provider";
 
 export const runtime = "nodejs";
 const execFileAsync = promisify(execFile);
@@ -17,13 +18,30 @@ async function extractPdf(buffer: Buffer) {
   try {
     await writeFile(pdfPath, buffer);
     await execFileAsync("pdftotext", ["-layout", pdfPath, textPath], { timeout: 30_000 });
-    const text = await readFile(textPath, "utf8");
-    return text;
+    return await readFile(textPath, "utf8");
   } finally {
     await unlink(pdfPath).catch(() => undefined);
     await unlink(textPath).catch(() => undefined);
     await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+async function addChunks(documentId: string, text: string) {
+  const chunks = chunkText(text);
+  if (!chunks.length) return 0;
+  const vectors = await embedTexts(chunks);
+  await Promise.all(chunks.map((chunk, position) =>
+    prisma.chunk.create({
+      data: {
+        documentId,
+        text: chunk,
+        position,
+        embedding: JSON.stringify(vectors[position]),
+        model: embeddingModelName,
+      },
+    })
+  ));
+  return chunks.length;
 }
 
 const DEMO_DOCUMENT = `# Atlas Research Notes
@@ -51,23 +69,13 @@ export async function GET() {
     const document = await prisma.document.create({
       data: { name: "Atlas research notes.md", type: "text/markdown", size: DEMO_DOCUMENT.length, text: DEMO_DOCUMENT },
     });
-    await Promise.all(chunkText(DEMO_DOCUMENT).map((text, position) =>
-      prisma.chunk.create({
-        data: { documentId: document.id, text, position, embedding: JSON.stringify(embedText(text)) },
-      })
-    ));
+    await addChunks(document.id, DEMO_DOCUMENT);
   } else {
     const documentsWithoutChunks = await prisma.document.findMany({
       where: { chunks: { none: {} } },
       select: { id: true, text: true },
     });
-    await Promise.all(documentsWithoutChunks.flatMap((document) =>
-      chunkText(document.text).map((text, position) =>
-        prisma.chunk.create({
-          data: { documentId: document.id, text, position, embedding: JSON.stringify(embedText(text)) },
-        })
-      )
-    ));
+    await Promise.all(documentsWithoutChunks.map((document) => addChunks(document.id, document.text)));
   }
 
   const documents = await prisma.document.findMany({
@@ -92,26 +100,18 @@ export async function POST(request: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  let text = "";
-  if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
-    text = await extractPdf(buffer);
-  } else {
-    text = buffer.toString("utf8");
-  }
+  let text = /\.pdf$/i.test(file.name) || file.type === "application/pdf"
+    ? await extractPdf(buffer)
+    : buffer.toString("utf8");
   text = text.replace(/\0/g, "").trim();
   if (text.length < 20) return NextResponse.json({ error: "The file contains no readable text" }, { status: 422 });
 
   const document = await prisma.document.create({
     data: { name: file.name, type: file.type || "text/plain", size: file.size, text },
   });
-  const chunks = chunkText(text);
-  await Promise.all(chunks.map((chunk, position) =>
-    prisma.chunk.create({
-      data: { documentId: document.id, text: chunk, position, embedding: JSON.stringify(embedText(chunk)) },
-    })
-  ));
+  const chunkCount = await addChunks(document.id, text);
 
   return NextResponse.json({
-    document: { id: document.id, name: document.name, type: document.type, size: document.size, chunkCount: chunks.length },
+    document: { id: document.id, name: document.name, type: document.type, size: document.size, chunkCount },
   }, { status: 201 });
 }

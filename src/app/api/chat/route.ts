@@ -1,17 +1,44 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { answerFromContext, cosine, embedText, parseEmbedding } from "@/lib/rag";
+import { cosine, parseEmbedding } from "@/lib/rag";
+import { embedTexts, embeddingModelName, streamAnswer } from "@/lib/provider";
 
 export const runtime = "nodejs";
+
+function parseCitations(value: string) {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function GET() {
+  const messages = await prisma.message.findMany({ orderBy: { createdAt: "asc" }, take: 100 });
+  return NextResponse.json({
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      citations: parseCitations(message.citations),
+    })),
+  });
+}
+
+export async function DELETE() {
+  await prisma.message.deleteMany({});
+  return new NextResponse(null, { status: 204 });
+}
 
 export async function POST(request: NextRequest) {
   const { question } = await request.json();
   if (!question || typeof question !== "string" || !question.trim()) {
-    return new Response(JSON.stringify({ error: "Question is required" }), { status: 400 });
+    return NextResponse.json({ error: "Question is required" }, { status: 400 });
   }
 
-  const queryEmbedding = embedText(question);
+  const [queryEmbedding] = await embedTexts([question]);
   const chunks = await prisma.chunk.findMany({
+    where: { model: embeddingModelName },
     include: { document: { select: { id: true, name: true } } },
   });
 
@@ -28,24 +55,32 @@ export async function POST(request: NextRequest) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
-  const answer = answerFromContext(question, ranked);
-  await prisma.message.create({ data: { role: "user", content: question, citations: "[]" } });
-  await prisma.message.create({
-    data: { role: "assistant", content: answer, citations: JSON.stringify(ranked.map(({ id, documentId, documentName, position, text, score }) => ({ id, documentId, documentName, position, text, score }))) },
-  });
+  const citations = ranked.map(({ id, documentId, documentName, position, text, score }) => ({
+    id, documentId, documentName, position, text, score,
+  }));
 
   const encoder = new TextEncoder();
-  const words = answer.split(/(\s+)/);
-  let index = 0;
+  let answer = "";
   const stream = new ReadableStream({
-    pull(controller) {
-      if (index >= words.length) {
-        controller.enqueue(encoder.encode(`\n\n__CITATIONS__${JSON.stringify(ranked.map(({ id, documentId, documentName, position, text, score }) => ({ id, documentId, documentName, position, text, score })))}`));
-        controller.close();
-        return;
+    async start(controller) {
+      try {
+        for await (const token of streamAnswer(question, ranked)) {
+          answer += token;
+          controller.enqueue(encoder.encode(token));
+        }
+      } catch {
+        const fallback = "I could not generate an answer. Please try again.";
+        answer += fallback;
+        controller.enqueue(encoder.encode(fallback));
       }
-      const part = words[index++];
-      controller.enqueue(encoder.encode(part));
+
+      controller.enqueue(encoder.encode(`\n\n__CITATIONS__${JSON.stringify(citations)}`));
+      try {
+        await prisma.message.create({ data: { role: "user", content: question, citations: "[]" } });
+        await prisma.message.create({ data: { role: "assistant", content: answer, citations: JSON.stringify(citations) } });
+      } finally {
+        controller.close();
+      }
     },
   });
 
