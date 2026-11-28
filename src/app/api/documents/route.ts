@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { chunkText } from "@/lib/rag";
-import { embedTexts, embeddingModelName } from "@/lib/provider";
+import { embedWithFallback } from "@/lib/provider";
 import { DEMO_DOCUMENT } from "@/lib/demo-document";
 
 export const runtime = "nodejs";
@@ -18,13 +18,8 @@ function unauthorized() {
 }
 
 async function claimSeed(key: string) {
-  try {
-    await prisma.appMeta.create({ data: { key, value: "true" } });
-    return true;
-  } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") return false;
-    throw error;
-  }
+  const changes = await prisma.$executeRaw`INSERT OR IGNORE INTO AppMeta (key, value) VALUES (${key}, ${"true"})`;
+  return changes === 1;
 }
 
 async function extractPdf(buffer: Buffer) {
@@ -45,7 +40,9 @@ async function extractPdf(buffer: Buffer) {
 async function createDocumentWithChunks(data: { name: string; type: string; size: number; text: string; userId: string }) {
   const id = randomUUID();
   const chunks = chunkText(data.text);
-  const vectors = chunks.length ? await embedTexts(chunks) : [];
+  const embedded = chunks.length
+    ? await embedWithFallback(chunks)
+    : { vectors: [], model: "hash-384-v2" };
   await prisma.$transaction([
     prisma.document.create({ data: { id, ...data } }),
     ...chunks.map((chunk, position) =>
@@ -54,8 +51,8 @@ async function createDocumentWithChunks(data: { name: string; type: string; size
           documentId: id,
           text: chunk,
           position,
-          embedding: JSON.stringify(vectors[position]),
-          model: embeddingModelName,
+          embedding: JSON.stringify(embedded.vectors[position]),
+          model: embedded.model,
         },
       })
     ),
@@ -84,11 +81,9 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { chunks: true } } },
   });
-  const activeChunkCount = await prisma.chunk.count({
-    where: { model: embeddingModelName, document: { userId: user.id } },
-  });
-  const warning = documents.length > 0 && activeChunkCount === 0
-    ? `No chunks match the active embedding model (${embeddingModelName}). Re-upload your documents.`
+  const chunkCount = await prisma.chunk.count({ where: { document: { userId: user.id } } });
+  const warning = documents.length > 0 && chunkCount === 0
+    ? "Your documents have no indexed chunks. Re-upload them to enable search."
     : null;
 
   return NextResponse.json({ documents, warning });
@@ -129,15 +124,19 @@ export async function POST(request: NextRequest) {
   text = text.replace(/\0/g, "").trim();
   if (text.length < 20) return NextResponse.json({ error: "The file contains no readable text" }, { status: 422 });
 
-  const { id, chunkCount } = await createDocumentWithChunks({
-    name: file.name,
-    type: file.type || "text/plain",
-    size: file.size,
-    text,
-    userId: user.id,
-  });
-
-  return NextResponse.json({
-    document: { id, name: file.name, type: file.type || "text/plain", size: file.size, chunkCount },
-  }, { status: 201 });
+  try {
+    const { id, chunkCount } = await createDocumentWithChunks({
+      name: file.name,
+      type: file.type || "text/plain",
+      size: file.size,
+      text,
+      userId: user.id,
+    });
+    return NextResponse.json({
+      document: { id, name: file.name, type: file.type || "text/plain", size: file.size, chunkCount },
+    }, { status: 201 });
+  } catch (error) {
+    console.error("Document ingestion failed:", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "Ingestion is temporarily unavailable." }, { status: 502 });
+  }
 }

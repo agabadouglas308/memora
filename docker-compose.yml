@@ -5,6 +5,10 @@ services:
       - "3000:3000"
     environment:
       SESSION_SECRET: ${SESSION_SECRET:-memora-development-secret-change-me}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_EMBED_MODEL: ${LLM_EMBED_MODEL:-text-embedding-3-small}
     volumes:
       - memora-data:/app/prisma
 

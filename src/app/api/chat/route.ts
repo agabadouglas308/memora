@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { embedTexts, embeddingModelName, streamAnswer, usesOllama } from "@/lib/provider";
+import { activeChatKind, embedWithFallback, streamWithFallback } from "@/lib/provider";
 import { rankChunks } from "@/lib/retrieval";
 import { CITATION_MARKER } from "@/lib/protocol";
 
@@ -61,61 +61,66 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser(request);
   if (!user) return unauthorized();
 
-  const [queryEmbedding] = await embedTexts([question]);
-  const chunks = await prisma.chunk.findMany({
-    where: { model: embeddingModelName, document: { userId: user.id } },
-    include: { document: { select: { id: true, name: true } } },
-  });
+  try {
+    const embedded = await embedWithFallback([question]);
+    const chunks = await prisma.chunk.findMany({
+      where: { model: embedded.model, document: { userId: user.id } },
+      include: { document: { select: { id: true, name: true } } },
+    });
 
-  const ranked = rankChunks(
-    question,
-    chunks.map((chunk) => ({
-      id: chunk.id,
-      text: chunk.text,
-      position: chunk.position,
-      embedding: chunk.embedding,
-      documentId: chunk.document.id,
-      documentName: chunk.document.name,
-    })),
-    queryEmbedding,
-    { useCandidates: !usesOllama() }
-  );
+    const ranked = rankChunks(
+      question,
+      chunks.map((chunk) => ({
+        id: chunk.id,
+        text: chunk.text,
+        position: chunk.position,
+        embedding: chunk.embedding,
+        documentId: chunk.document.id,
+        documentName: chunk.document.name,
+      })),
+      embedded.vectors[0],
+      { useCandidates: embedded.kind === "hash" }
+    );
 
-  const citations = ranked.map(({ id, documentId, documentName, position, text, score }) => ({
-    id, documentId, documentName, position, text, score,
-  }));
+    const citations = ranked.map(({ id, documentId, documentName, position, text, score }) => ({
+      id, documentId, documentName, position, text, score,
+    }));
 
-  const encoder = new TextEncoder();
-  let answer = "";
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const token of streamAnswer(question, ranked)) {
-          answer += token;
-          controller.enqueue(encoder.encode(token));
+    const encoder = new TextEncoder();
+    let answer = "";
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const token of streamWithFallback(question, ranked, activeChatKind())) {
+            answer += token;
+            controller.enqueue(encoder.encode(token));
+          }
+        } catch {
+          const fallback = "I could not generate an answer. Please try again.";
+          answer += fallback;
+          controller.enqueue(encoder.encode(fallback));
         }
-      } catch {
-        const fallback = "I could not generate an answer. Please try again.";
-        answer += fallback;
-        controller.enqueue(encoder.encode(fallback));
-      }
 
-      controller.enqueue(encoder.encode(`\n\n${CITATION_MARKER}${JSON.stringify(citations)}`));
-      try {
-        await prisma.message.create({ data: { role: "user", content: question, citations: "[]", userId: user.id } });
-        await prisma.message.create({ data: { role: "assistant", content: answer, citations: JSON.stringify(citations), userId: user.id } });
-      } catch {
-        // A failed history write must not break the answer stream.
-      }
-      controller.close();
-    },
-  });
+        controller.enqueue(encoder.encode(`\n\n${CITATION_MARKER}${JSON.stringify(citations)}`));
+        try {
+          await prisma.message.create({ data: { role: "user", content: question, citations: "[]", userId: user.id } });
+          await prisma.message.create({ data: { role: "assistant", content: answer, citations: JSON.stringify(citations), userId: user.id } });
+        } catch {
+          // A failed history write must not break the answer stream.
+        }
+        controller.close();
+      },
+    });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  } catch (error) {
+    console.error("Chat request failed:", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "The chat service is temporarily unavailable." }, { status: 502 });
+  }
 }

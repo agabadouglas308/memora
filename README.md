@@ -12,7 +12,7 @@ Memora is a document Q&A workspace: upload knowledge, ask questions, and inspect
 - **Accounts**: email and password registration, salted scrypt hashes, signed HTTP-only session cookies, and per-user scoping on every document, chunk, and message query.
 - **Chat history**: conversations are saved in SQLite and restored on reload. "New chat" clears them.
 - **GitHub Pages demo**: an interactive browser-only preview in [`docs/`](./docs/). It uses the same chunking, embedding, and cosine pipeline as the server, but keeps data in memory so it is cleared on refresh.
-- **Tests**: 71 Vitest cases covering chunking, embeddings, retrieval, authentication, rate limiting, all API routes, both provider modes, and malformed input handling.
+- **Tests**: 86 Vitest cases covering chunking, embeddings, retrieval, authentication, rate limiting, all API routes, chat-only hosted providers with local embeddings, runtime fallback, and malformed input handling.
 - **Evaluation harness**: a labeled question set with recall@k, precision@k, MRR, and groundedness, runnable with `npm run eval`.
 
 GitHub Pages only hosts static files; it cannot run the Next.js API routes or SQLite database. Use the Pages site as a product demo, and run the full app locally or deploy it to a Node.js host for server-backed ingestion and persistence.
@@ -58,13 +58,28 @@ Set `SESSION_SECRET` (see `.env.example`) for real deployments. Without it, deve
 
 Passwords are hashed with scrypt and a random salt. Sessions are HMAC-signed cookies containing a user id and expiry, marked `httpOnly`, `SameSite=Lax`, and `Secure` in production. Every document, chunk, and message query is scoped to the signed-in user; the API returns 401 for anonymous requests and never exposes another user's data. The first account created inherits any documents from an older, unauthenticated database.
 
-## Optional: use a real model
+## Model providers
 
-By default Memora runs without any external service: hashed token vectors for retrieval and extractive answers built from the retrieved passages. To use a local Ollama instance for embeddings and token-by-token generation:
+Memora picks a provider in this order:
 
-1. Install Ollama, then pull a chat model and an embedding model, for example `ollama pull llama3.2` and `ollama pull nomic-embed-text`.
-2. Copy `.env.example` to `.env.local` and set `OLLAMA_MODEL`. `OLLAMA_HOST` and `OLLAMA_EMBED_MODEL` can be overridden too.
-3. Restart the app and re-upload your documents.
+1. **Hosted API** (primary): set `LLM_API_KEY` in `.env.local`. Any OpenAI-compatible `/chat/completions` API works. `LLM_BASE_URL` and `LLM_MODEL` choose the endpoint and chat model. The key is read only from the environment and sent in an `Authorization` header; it is never written to source or logs.
+2. **Ollama** (fallback): if no hosted chat is available, set `OLLAMA_MODEL` to use a local Ollama instance. Install Ollama and pull a chat and embedding model, for example `ollama pull llama3.2` and `ollama pull nomic-embed-text`. `OLLAMA_HOST` and `OLLAMA_EMBED_MODEL` can be overridden.
+3. **Built-in baseline** (final fallback): with neither configured, the app uses hashed token vectors and extractive answers and needs no external service.
+
+### Using Groq
+
+Groq serves chat completions but has no embeddings endpoint, so keep embeddings local:
+
+```env
+LLM_API_KEY=gsk_your_key_here
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.3-70b-versatile
+LLM_EMBED_MODEL=none
+```
+
+`LLM_EMBED_MODEL=none` tells the app to index documents with the built-in local embeddings while still sending chat requests to Groq. For a provider that does offer `/embeddings`, set `LLM_EMBED_MODEL` to its model name and optionally override `LLM_EMBED_BASE_URL` if it differs from `LLM_BASE_URL`.
+
+Placeholder values such as `your-api-key-here` are treated as unset, so copying `.env.example` without editing it safely falls through to Ollama or the baseline. If a hosted request fails at runtime (bad key, rate limit, or network timeout), the app catches it, marks the hosted provider unavailable for five minutes, and falls through to the next provider without failing the request. Documents and queries are tagged with the provider that actually indexed them, so results stay consistent. If every provider fails, the API returns a 502 with a generic message instead of crashing. After switching providers, restart the app and re-upload your documents.
 
 Chunks record which embedding model created them, and retrieval only considers chunks from the active model. Switching modes against an existing database leaves old chunks out of results until they are re-ingested; the app shows a warning in the chat panel when that happens.
 

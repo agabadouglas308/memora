@@ -12,7 +12,7 @@ const prisma = vi.hoisted(() => ({
     create: vi.fn(),
     count: vi.fn(),
   },
-  appMeta: { create: vi.fn() },
+  $executeRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -33,7 +33,7 @@ function uploadRequest(file: File) {
 beforeEach(() => {
   vi.clearAllMocks();
   auth.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user@example.com" });
-  prisma.appMeta.create.mockResolvedValue({ key: "demoSeeded", value: "true" });
+  prisma.$executeRaw.mockResolvedValue(1);
   prisma.document.count.mockResolvedValue(0);
   prisma.document.create.mockResolvedValue({});
   prisma.document.findMany.mockResolvedValue([]);
@@ -63,7 +63,7 @@ describe("GET /api/documents", () => {
   });
 
   it("does not seed when another request already claimed the seed", async () => {
-    prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
+    prisma.$executeRaw.mockResolvedValue(0);
 
     await GET(new NextRequest("http://localhost/api/documents"));
 
@@ -72,7 +72,7 @@ describe("GET /api/documents", () => {
   });
 
   it("does not reseed after the last document was deleted", async () => {
-    prisma.appMeta.create.mockRejectedValue({ code: "P2002" });
+    prisma.$executeRaw.mockResolvedValue(0);
     prisma.document.count.mockResolvedValue(0);
 
     const response = await GET(new NextRequest("http://localhost/api/documents"));
@@ -100,7 +100,7 @@ describe("GET /api/documents", () => {
     prisma.chunk.count.mockResolvedValue(0);
 
     const data = await (await GET(new NextRequest("http://localhost/api/documents"))).json();
-    expect(data.warning).toContain("Re-upload your documents");
+    expect(data.warning).toContain("Re-upload them");
   });
 });
 
